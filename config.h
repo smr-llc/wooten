@@ -5,4 +5,4 @@
 #define NETBUFF_SAMPLES 64
 #define NETBUFF_BYTES (NETBUFF_SAMPLES * 4)
 #define RXPORT 8314
-#define DEST_HOST "127.0.0.1"
+#define DEST_HOST "192.168.1.4"

@@ -9,14 +9,14 @@ struct WootRx {
     int sock;
     struct sockaddr_in peerAddr;
 	socklen_t peerSockLen;
-    int rxLen;
-    char buf[NETBUFF_BYTES];
+    int rxLen[2];
+    char buf[2][NETBUFF_BYTES];
 };
 
 int initWootRx(WootRx* rx, int port);
-int rxBytes(WootRx* rx);
+// int rxBytes(WootRx* rx);
 
-void rxUdp(void*);
-int readRxUdpSamples(float* buf, int num);
+// void rxUdp(void*);
+// int readRxUdpSamples(float* buf, int num);
 
 void writeRxUdpSamples(WootRx* rx, BelaContext *context, int nChan);

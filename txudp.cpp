@@ -12,6 +12,39 @@ float outBuff[RINGBUFF_SAMPLES];
 int outIdxW;
 int outIdxR;
 
+int initWootTx(WootTx* tx, const char* host, int port) {
+	memset((char *)tx, 0, sizeof(WootTx));
+
+	tx->peerAddrLen = sizeof(tx->peerAddr);
+
+	if ( (tx->sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP)) == -1)
+	{
+		printf("failed to create transmit udp socket\n");
+		fflush(stdout);
+		return 1;	
+	}
+	memset((char *) &tx->peerAddr, 0, tx->peerAddrLen);
+	tx->peerAddr.sin_family = AF_INET;
+	tx->peerAddr.sin_port = htons(RXPORT);
+	if (inet_aton(host, &tx->peerAddr.sin_addr) == 0) 
+	{
+		printf("failed to resolve server\n");
+		fflush(stdout);
+		return 2;
+	}
+
+	return 0;
+}
+
+int txBytes(WootTx* tx) {
+	int result = sendto(tx->sock, (char*)tx->buf, NETBUFF_BYTES , 0 , (struct sockaddr *) &tx->peerAddr, tx->peerAddrLen);
+	if (result == -1) {
+		printf("failed to send over udp\n");
+		fflush(stdout);
+	}
+	return result;
+}
+
 void txUdp(void*) {
 	outIdxW = 0;
 	outIdxR = 0;
@@ -20,26 +53,11 @@ void txUdp(void*) {
 	printf("Starting txUdp...\n");
 	fflush(stdout);
 
-	struct sockaddr_in si_other;
-	int s;
-	socklen_t slen = sizeof(si_other);
-	if ( (s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-	{
-	        printf("failed to create transmit udp socket\n");
-	        fflush(stdout);
-		return;	
-	}
-	memset((char *) &si_other, 0, sizeof(si_other));
-	si_other.sin_family = AF_INET;
-	si_other.sin_port = htons(RXPORT);
-	if (inet_aton("127.0.0.1" , &si_other.sin_addr) == 0) 
-	{
-		printf("failed to resolve server\n");
-		fflush(stdout);
+	WootTx tx;
+	if (initWootTx(&tx, DEST_HOST, RXPORT) != 0) {
 		return;
 	}
-
-	char netOutBuff[NETBUFF_BYTES];
+	
 	while(!Bela_stopRequested())
 	{
 		int availableSamples = outIdxW - outIdxR;
@@ -47,18 +65,13 @@ void txUdp(void*) {
 			availableSamples += RINGBUFF_SAMPLES;
 		}
 		if (availableSamples < NETBUFF_SAMPLES) {
-			usleep(500);
+			usleep(125);
 			continue;
 		}
-		memcpy(netOutBuff, (char*)(&outBuff[outIdxR]), NETBUFF_BYTES);
+		memcpy((char*)tx.buf, (char*)(&outBuff[outIdxR]), NETBUFF_BYTES);
 		outIdxR += NETBUFF_SAMPLES;
 		outIdxR %= RINGBUFF_SAMPLES;
-		if (sendto(s, netOutBuff, NETBUFF_BYTES , 0 , (struct sockaddr *) &si_other, slen) == -1)
-		{
-			printf("failed to send over udp");
-			fflush(stdout);
-			return;
-		}
+		txBytes(&tx);
 	}
 	printf("Ending txUdp\n");
 	fflush(stdout);
@@ -69,4 +82,16 @@ void writeTxUdpSample(float sample) {
 	outBuff[outIdxW] = sample;
 	outIdxW += 1;
 	outIdxW %= RINGBUFF_SAMPLES;
+}
+
+int writeTxUdpSamples(WootTx* tx, BelaContext *context, int nChan) {
+	for(unsigned int n = 0; n < context->audioFrames; n++) {
+		for(unsigned int ch = 0; ch < nChan; ch++){
+			tx->buf[(n * nChan) + ch] = audioRead(context, n, ch);
+		}
+	}
+	// for (int i = 0; i < NETBUFF_SAMPLES; i++) {
+	// 	tx->buf[i] = ((float)(i))/80.0f - 0.9f;
+	// }
+	return txBytes(tx);
 }

@@ -12,6 +12,48 @@ float inBuff[RINGBUFF_SAMPLES];
 int inIdxW;
 int inIdxR;
 
+int initWootRx(WootRx* rx, int port) {
+	memset((char *)rx, 0, sizeof(WootRx));
+
+	rx->peerSockLen = sizeof(rx->peerAddr);
+
+	if ((rx->sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+	{
+		printf("failed to create udp receive socket, got errno %d\n", errno);
+		fflush(stdout);
+		return 1;
+	}
+
+	struct sockaddr_in addr;
+	memset((char *) &addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	if( bind(rx->sock, (struct sockaddr*)&addr, sizeof(addr) ) == -1)
+	{
+		printf("failed to bind udp receive socket, got errno %d\n", errno);
+		fflush(stdout);
+		return 2;
+	}
+
+	// struct timeval tv;
+	// tv.tv_sec = 1;
+	// tv.tv_usec = 500000;
+	// if (setsockopt(rx->sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+	// 	    printf("failed to set timeout on receive socket, got errno %d\n", errno);
+  	// 	    fflush(stdout);
+	// 	    return 3;
+	// }
+
+	return 0;
+}
+
+int rxBytes(WootRx* rx) {
+	rx->rxLen = recvfrom(rx->sock, rx->buf, NETBUFF_BYTES, 0, (struct sockaddr*)&rx->peerAddr, &rx->peerSockLen);
+	return rx->rxLen;
+}
+
 void rxUdp(void*) {
 	memset((char*)inBuff, 0, RINGBUFF_BYTES);
 	inIdxW = 0;
@@ -20,53 +62,18 @@ void rxUdp(void*) {
 	printf("Starting rxUdp...\n");
 	fflush(stdout);
 
-	struct sockaddr_in si_me, si_other;
-	socklen_t slen = sizeof(si_other);
-	int s, recv_len;
-	if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-	{
-		printf("failed to create udp receive socket, got errno %d\n", errno);
-		fflush(stdout);
-		sleep(5);
-		return;
-	}
-	memset((char *) &si_me, 0, sizeof(si_me));
-	si_me.sin_family = AF_INET;
-	si_me.sin_port = htons(RXPORT);
-	si_me.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	if( bind(s , (struct sockaddr*)&si_me, sizeof(si_me) ) == -1)
-	{
-		printf("failed to bind udp receive socket, got errno %d\n", errno);
-		fflush(stdout);
-		sleep(5);
+	WootRx rx;
+	if (initWootRx(&rx, RXPORT) != 0) {
 		return;
 	}
 
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 500000;
-	if (setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-		    printf("failed to set timeout on receive socket, got errno %d\n", errno);
-  		    fflush(stdout);
-			sleep(5);
-		    return;
-	}
-
-
-	char netInBuff[NETBUFF_BYTES];
 	while (!Bela_stopRequested()) {
-		if ((recv_len = recvfrom(s, netInBuff, NETBUFF_BYTES, 0, (struct sockaddr *) &si_other, &slen)) == -1)
+		if (rxBytes(&rx) == -1)
 		{
-			if (errno == ETIMEDOUT) {
+			if (errno == ETIMEDOUT || errno == EAGAIN) {
 				printf("rxUdp timed out while receiving...\n");
 				fflush(stdout);
-				continue;
-			}
-			else if (errno == EAGAIN) {
-				printf("rxUdp got 'try again' error while receiving...\n");
-				fflush(stdout);
-				sleep(1);
+				//sleep(1);
 				continue;
 			}
 			printf("failed to receive on udp socket, got errno %d\n", errno);
@@ -74,11 +81,16 @@ void rxUdp(void*) {
 			sleep(5);
 			return;
 		}
-		if (recv_len == NETBUFF_BYTES) {
-			memcpy((char*)(&inBuff[inIdxW]), netInBuff, NETBUFF_BYTES);
+		if (rx.rxLen == NETBUFF_BYTES) {
+			memcpy((char*)(&inBuff[inIdxW]), rx.buf, NETBUFF_BYTES);
 			inIdxW += NETBUFF_SAMPLES;
 			inIdxW %= RINGBUFF_SAMPLES;
-		}	
+		}
+		else {
+			printf("wrong buffer size %d\n", rx.rxLen);
+			fflush(stdout);
+			sleep(5);
+		}
 	}
 	printf("Ending rxUdp\n");
 	fflush(stdout);
@@ -96,4 +108,22 @@ int readRxUdpSamples(float* buf, int num) {
 	inIdxR += num;
 	inIdxR %= RINGBUFF_SAMPLES;
 	return num;
+}
+
+void writeRxUdpSamples(WootRx* rx, BelaContext *context, int nChan) {
+	rx->rxLen = recv(rx->sock, rx->buf, NETBUFF_BYTES, MSG_DONTWAIT);
+	if (rx->rxLen != NETBUFF_BYTES) {
+		for(unsigned int n = 0; n < context->audioFrames; n++) {
+			for(unsigned int ch = 0; ch < nChan; ch++){
+				audioWrite(context, n, ch, 0);
+			}
+		}
+	}
+	else {
+		for(unsigned int n = 0; n < context->audioFrames; n++) {
+			for(unsigned int ch = 0; ch < nChan; ch++){
+				audioWrite(context, n, ch, ((float*)rx->buf)[(n * 2) + ch]);
+			}
+		}
+	}
 }

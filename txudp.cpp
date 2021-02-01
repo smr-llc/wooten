@@ -72,5 +72,10 @@ void WootTx::sendFrame(BelaContext *context, int nChan) {
 			m_buf[(n * nChan) + ch] = audioRead(context, n, ch);
 		}
 	}
-	m_bufWritten = (m_bufWritten + 1) % 8192;
+	sendto(m_sock,
+		m_buf,
+		NETBUFF_BYTES,
+		0,
+		(struct sockaddr *) &m_peerAddr,
+		m_peerAddrLen);
 }

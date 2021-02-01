@@ -83,6 +83,7 @@ int WootRx::readAllUdp() {
 
 
 void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
+	readAllUdp();
 	if (m_bufLen[m_currBuf] != NETBUFF_BYTES) {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
@@ -96,5 +97,6 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 				audioWrite(context, n, ch, ((float*)m_buf[m_currBuf])[(n * 2) + ch]);
 			}
 		}
+		m_bufLen[m_currBuf] = 0;
 	}
 }

@@ -2,20 +2,23 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <mutex>
 #include "config.h"
 
-typedef struct WootTx WootTx;
-struct WootTx {
-    int sock;
-    struct sockaddr_in peerAddr;
-	socklen_t peerAddrLen;
-    float buf[NETBUFF_BYTES];
+class WootTx {
+public:
+    WootTx();
+
+    int connect(const char* host, int port);
+    void sendFrame(BelaContext *context, int nChan);
+
+    static void txUdp(void*);
+
+private:
+    int m_sock;
+    int m_bufWritten;
+    int m_bufRead;
+    struct sockaddr_in m_peerAddr;
+	socklen_t m_peerAddrLen;
+    float m_buf[NETBUFF_SAMPLES];
 };
-
-int initWootTx(WootTx* rx, const char* host, int port);
-int txBytes(WootTx* rx);
-
-void txUdp(void*);
-void writeTxUdpSample(float sample);
-
-int writeTxUdpSamples(WootTx* tx, BelaContext *context, int nChan);

@@ -4,19 +4,24 @@
 #include <arpa/inet.h>
 #include "config.h"
 
-typedef struct WootRx WootRx;
-struct WootRx {
-    int sock;
-    struct sockaddr_in peerAddr;
-	socklen_t peerSockLen;
-    int rxLen[2];
-    char buf[2][NETBUFF_BYTES];
+#define RX_BUFFERS 2
+
+class WootRx {
+public:
+    WootRx();
+
+    int init(int port);
+    void writeReceivedFrame(BelaContext *context, int nChan);
+
+    static void rxUdp(void*);
+
+private:
+    int readAllUdp();
+
+    int m_sock;
+    struct sockaddr_in m_peerAddr;
+	socklen_t m_peerSockLen;
+    int m_currBuf;
+    int m_bufLen[RX_BUFFERS];
+    char m_buf[RX_BUFFERS][NETBUFF_BYTES];
 };
-
-int initWootRx(WootRx* rx, int port);
-// int rxBytes(WootRx* rx);
-
-// void rxUdp(void*);
-// int readRxUdpSamples(float* buf, int num);
-
-void writeRxUdpSamples(WootRx* rx, BelaContext *context, int nChan);

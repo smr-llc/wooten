@@ -92,7 +92,7 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	if (bufSamples < context->audioFrames) {
+	if (bufSamples < (context->audioFrames / 2)) {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
 				audioWrite(context, n, ch, 0);
@@ -102,8 +102,8 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 	else {
 		for(unsigned int n = 0; n < context->audioFrames; n += 2) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n, ch, m_buf[m_readPos + n]);
-				audioWrite(context, n + 1, ch, m_buf[m_readPos + n]);
+				audioWrite(context, n, ch, m_buf[m_readPos + (n/2)]);
+				audioWrite(context, n + 1, ch, m_buf[m_readPos + (n/2)]);
 			}
 		}
 		m_readPos += (context->audioFrames / 2);

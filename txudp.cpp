@@ -83,7 +83,7 @@ void WootTx::sendFrame(BelaContext *context, int nChan) {
 		if (nChan > 0) {
 			val /= nChan;
 		}
-		m_buf[m_writePos + n] = (float)val;
+		m_buf[m_writePos + (n/2)] = (float)val;
 	}
 	m_writePos += (context->audioFrames / 2);
 	m_writePos %= RINGBUFF_SAMPLES;

@@ -71,7 +71,7 @@ void WootRx::readAllUdp() {
 		if (nBytes == NETBUFF_BYTES) {
 			memcpy(&m_buf16[m_writePos], m_netBuf, NETBUFF_BYTES);
 			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				m_buf[m_writePos + i] = ((float)m_buf16[i]) / 32768.0;
+				m_buf[m_writePos + i] = (float)(((float)(m_buf16[i])) / 32768.0f);
 			}
 			m_writePos += NETBUFF_SAMPLES;
 			m_writePos %= RINGBUFF_SAMPLES;

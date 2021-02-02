@@ -24,7 +24,6 @@ private:
     int m_writePos;
     struct sockaddr_in m_peerAddr;
 	socklen_t m_peerSockLen;
-    char m_netBuf[NETBUFF_BYTES];
-    int16_t m_buf16[NETBUFF_SAMPLES];
+    int16_t m_netBuf[NETBUFF_SAMPLES];
     float m_buf[RINGBUFF_SAMPLES];
 };

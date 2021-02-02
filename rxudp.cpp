@@ -63,15 +63,14 @@ void WootRx::rxUdp(void* rxArg) {
 void WootRx::readAllUdp() {
 	while (true) {
 		int nBytes = recvfrom(m_sock,
-								m_netBuf,
+								(char*)m_netBuf,
 								NETBUFF_BYTES,
 								MSG_DONTWAIT,
 								(struct sockaddr *) &m_peerAddr,
 								&m_peerSockLen);
 		if (nBytes == NETBUFF_BYTES) {
-			memcpy(&m_buf16[m_writePos], m_netBuf, NETBUFF_BYTES);
 			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				m_buf[m_writePos + i] = (float)(((float)(m_buf16[i])) / 32768.0f);
+				m_buf[m_writePos + i] = ((float)m_netBuf[i]) / 32768.0f;
 			}
 			m_writePos += NETBUFF_SAMPLES;
 			m_writePos %= RINGBUFF_SAMPLES;

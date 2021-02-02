@@ -46,7 +46,6 @@ void WootTx::txUdp(void* txArg) {
 	printf("Starting txUdp...\n");
 	fflush(stdout);
 
-	char bufBuf[NETBUFF_BYTES];
 	int16_t buf16[NETBUFF_SAMPLES];
 	
 	while(!Bela_stopRequested())
@@ -59,9 +58,8 @@ void WootTx::txUdp(void* txArg) {
 			tx->m_readPos += NETBUFF_SAMPLES;
 			tx->m_readPos %= RINGBUFF_SAMPLES;
 
-			memcpy(bufBuf, buf16, NETBUFF_BYTES);
 			sendto(tx->m_sock,
-					bufBuf,
+					(char*)buf16,
 					NETBUFF_BYTES,
 					0,
 					(struct sockaddr *) &tx->m_peerAddr,

@@ -75,7 +75,7 @@ void WootTx::txUdp(void* txArg) {
 }
 
 void WootTx::sendFrame(BelaContext *context, int nChan) {
-	for(unsigned int n = 0; n < context->audioFrames; n++) {
+	for(unsigned int n = 0; n < context->audioFrames; n += 2) {
 		double val = 0.0;
 		for(unsigned int ch = 0; ch < nChan; ch++){
 			val += audioRead(context, n, ch);
@@ -85,6 +85,6 @@ void WootTx::sendFrame(BelaContext *context, int nChan) {
 		}
 		m_buf[m_writePos + n] = (float)val;
 	}
-	m_writePos += context->audioFrames;
+	m_writePos += (context->audioFrames / 2);
 	m_writePos %= RINGBUFF_SAMPLES;
 }

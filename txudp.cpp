@@ -10,8 +10,8 @@
 
 WootTx::WootTx() :
 	m_sock(0),
-	m_bufWritten(0),
-	m_bufRead(0)
+	m_writePos(0),
+	m_readPos(0)
 {
 	
 }
@@ -21,7 +21,7 @@ int WootTx::connect(const char* host, int port) {
 
 	if ( (m_sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP)) == -1)
 	{
-		printf("failed to create transmit udp socket\n");
+		printf("Failed to create outgoing udp socket!\n");
 		fflush(stdout);
 		return 1;	
 	}
@@ -31,7 +31,7 @@ int WootTx::connect(const char* host, int port) {
 	m_peerAddr.sin_port = htons(port);
 	if (inet_aton(host, &m_peerAddr.sin_addr) == 0) 
 	{
-		printf("failed to resolve server\n");
+		printf("Failed to resolve peer address!\n");
 		fflush(stdout);
 		return 2;
 	}
@@ -49,17 +49,21 @@ void WootTx::txUdp(void* txArg) {
 	
 	while(!Bela_stopRequested())
 	{
-		if (tx->m_bufRead != tx->m_bufWritten) {
-			tx->m_bufRead = tx->m_bufWritten;
-			memcpy(bufBuf, (char*)tx->m_buf, NETBUFF_BYTES);
+		int diff = tx->m_writePos - tx->m_readPos;
+		if (diff >= NETBUFF_SAMPLES || diff < 0) {
+			memcpy(bufBuf, (char*)(&tx->m_buf[tx->m_readPos]), NETBUFF_BYTES);
 			sendto(tx->m_sock,
 					bufBuf,
 					NETBUFF_BYTES,
 					0,
 					(struct sockaddr *) &tx->m_peerAddr,
 					tx->m_peerAddrLen);
+			tx->m_readPos += NETBUFF_SAMPLES;
+			tx->m_readPos %= RINGBUFF_SAMPLES;
 		}
-		usleep(150);
+		else {
+			usleep(150);
+		}
 	}
 
 	printf("Ending txUdp\n");
@@ -69,13 +73,9 @@ void WootTx::txUdp(void* txArg) {
 void WootTx::sendFrame(BelaContext *context, int nChan) {
 	for(unsigned int n = 0; n < context->audioFrames; n++) {
 		for(unsigned int ch = 0; ch < nChan; ch++){
-			m_buf[(n * nChan) + ch] = audioRead(context, n, ch);
+			m_buf[m_writePos + (n * nChan) + ch] = audioRead(context, n, ch);
 		}
 	}
-	sendto(m_sock,
-		m_buf,
-		NETBUFF_BYTES,
-		0,
-		(struct sockaddr *) &m_peerAddr,
-		m_peerAddrLen);
+	m_writePos += (context->audioFrames * nChan);
+	m_writePos %= RINGBUFF_SAMPLES;
 }

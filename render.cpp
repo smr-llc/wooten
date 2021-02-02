@@ -37,8 +37,8 @@ bool setup(BelaContext *context, void *userData)
 		return false;
 	}
 
-	// Bela_runAuxiliaryTask(WootRx::rxUdp, 50, &rx);
-	// Bela_runAuxiliaryTask(WootTx::txUdp, 50, &tx);
+	Bela_runAuxiliaryTask(WootRx::rxUdp, 50, &rx);
+	Bela_runAuxiliaryTask(WootTx::txUdp, 50, &tx);
 
 	return true;
 }

@@ -16,9 +16,9 @@ public:
 
 private:
     int m_sock;
-    int m_bufWritten;
-    int m_bufRead;
+    int m_readPos;
+    int m_writePos;
     struct sockaddr_in m_peerAddr;
 	socklen_t m_peerAddrLen;
-    float m_buf[NETBUFF_SAMPLES];
+    float m_buf[RINGBUFF_SAMPLES];
 };

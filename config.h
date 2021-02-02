@@ -6,3 +6,5 @@
 #define NETBUFF_BYTES (NETBUFF_SAMPLES * 4)
 #define RXPORT 8314
 #define DEST_HOST "192.168.1.4"
+
+#define RX_QUEUE_SIZE 2

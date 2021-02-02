@@ -11,9 +11,9 @@
 
 WootRx::WootRx() :
 	m_sock(0),
-	m_currBuf(0)
+	m_readPos(0),
+	m_writePos(0)
 {
-	memset((char *) &m_bufLen, 0, sizeof(int) * RX_BUFFERS);
 }
 
 
@@ -60,31 +60,38 @@ void WootRx::rxUdp(void* rxArg) {
 }
 
 
-int WootRx::readAllUdp() {
-	int readNum = 0;
-	int nBuf = m_currBuf;
+void WootRx::readAllUdp() {
 	while (true) {
-		int prevBuf = nBuf;
-		nBuf = (nBuf + 1) % RX_BUFFERS;
-		m_bufLen[nBuf] = 0;
-		m_bufLen[nBuf] = recvfrom(m_sock,
-										m_buf[nBuf],
-										NETBUFF_BYTES,
-										MSG_DONTWAIT,
-										(struct sockaddr *) &m_peerAddr,
-										&m_peerSockLen);
-		if (m_bufLen[nBuf] <= 0) {
-			m_currBuf = prevBuf;
-			return readNum;
+		int nBytes = recvfrom(m_sock,
+								m_netBuf,
+								NETBUFF_BYTES,
+								MSG_DONTWAIT,
+								(struct sockaddr *) &m_peerAddr,
+								&m_peerSockLen);
+		if (nBytes == NETBUFF_BYTES) {
+			memcpy(&m_buf[m_writePos], m_netBuf, NETBUFF_BYTES);
+			m_writePos += NETBUFF_SAMPLES;
+			m_writePos %= RINGBUFF_SAMPLES;
 		}
-		readNum++;
+		else {
+			return;
+		}
 	}
 }
 
 
 void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
-	readAllUdp();
-	if (m_bufLen[m_currBuf] != NETBUFF_BYTES) {
+	int bufSamples = m_writePos - m_readPos;
+	if (bufSamples < 0) {
+		bufSamples += RINGBUFF_SAMPLES;
+	}
+	if (bufSamples > (NETBUFF_SAMPLES * RX_QUEUE_SIZE)) {
+		m_readPos += bufSamples - (NETBUFF_SAMPLES * RX_QUEUE_SIZE);
+		m_readPos %= RINGBUFF_SAMPLES;
+	}
+
+	int toRead = context->audioFrames * nChan;
+	if (bufSamples < toRead) {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
 				audioWrite(context, n, ch, 0);
@@ -94,9 +101,10 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 	else {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n, ch, ((float*)m_buf[m_currBuf])[(n * 2) + ch]);
+				audioWrite(context, n, ch, m_buf[m_readPos + (n * 2) + ch]);
 			}
 		}
-		m_bufLen[m_currBuf] = 0;
+		m_readPos += toRead;
+		m_readPos %= RINGBUFF_SAMPLES;
 	}
 }

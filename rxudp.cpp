@@ -88,11 +88,11 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 		bufSamples += RINGBUFF_SAMPLES;
 	}
 	if (bufSamples > (NETBUFF_SAMPLES * RX_QUEUE_SIZE)) {
-		m_readPos += bufSamples - (NETBUFF_SAMPLES * RX_QUEUE_SIZE);
+		m_readPos += (RINGBUFF_SAMPLES + bufSamples) - (NETBUFF_SAMPLES * RX_QUEUE_SIZE);
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	if (bufSamples < (context->audioFrames / 2)) {
+	if (bufSamples < NETBUFF_SAMPLES) {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
 				audioWrite(context, n, ch, 0);
@@ -100,13 +100,13 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 		}
 	}
 	else {
-		for(unsigned int n = 0; n < context->audioFrames; n += 2) {
+		for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n, ch, m_buf[m_readPos + (n/2)]);
-				audioWrite(context, n + 1, ch, m_buf[m_readPos + (n/2)]);
+				audioWrite(context, n * DOWNSAMPLE_FACTOR, ch, m_buf[m_readPos + n]);
+				audioWrite(context, n * DOWNSAMPLE_FACTOR + 1, ch, m_buf[m_readPos + n]);
 			}
 		}
-		m_readPos += (context->audioFrames / 2);
+		m_readPos += NETBUFF_SAMPLES;
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 }

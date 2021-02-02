@@ -75,16 +75,16 @@ void WootTx::txUdp(void* txArg) {
 }
 
 void WootTx::sendFrame(BelaContext *context, int nChan) {
-	for(unsigned int n = 0; n < context->audioFrames; n += 2) {
+	for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
 		double val = 0.0;
 		for(unsigned int ch = 0; ch < nChan; ch++){
-			val += audioRead(context, n, ch);
+			val += audioRead(context, n * DOWNSAMPLE_FACTOR, ch);
 		}
 		if (nChan > 0) {
 			val /= nChan;
 		}
-		m_buf[m_writePos + (n/2)] = (float)val;
+		m_buf[m_writePos + n] = (float)val;
 	}
-	m_writePos += (context->audioFrames / 2);
+	m_writePos += NETBUFF_SAMPLES;
 	m_writePos %= RINGBUFF_SAMPLES;
 }

@@ -69,7 +69,10 @@ void WootRx::readAllUdp() {
 								(struct sockaddr *) &m_peerAddr,
 								&m_peerSockLen);
 		if (nBytes == NETBUFF_BYTES) {
-			memcpy(&m_buf[m_writePos], m_netBuf, NETBUFF_BYTES);
+			memcpy(&m_buf16[m_writePos], m_netBuf, NETBUFF_BYTES);
+			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
+				m_buf[m_writePos + i] = ((float)m_buf16[i]) / 32768.0;
+			}
 			m_writePos += NETBUFF_SAMPLES;
 			m_writePos %= RINGBUFF_SAMPLES;
 		}
@@ -90,8 +93,7 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	int toRead = context->audioFrames * nChan;
-	if (bufSamples < toRead) {
+	if (bufSamples < context->audioFrames) {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
 				audioWrite(context, n, ch, 0);
@@ -101,10 +103,10 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 	else {
 		for(unsigned int n = 0; n < context->audioFrames; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n, ch, m_buf[m_readPos + (n * 2) + ch]);
+				audioWrite(context, n, ch, m_buf[m_readPos + n]);
 			}
 		}
-		m_readPos += toRead;
+		m_readPos += context->audioFrames;
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 }

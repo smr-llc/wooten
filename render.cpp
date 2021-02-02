@@ -5,6 +5,8 @@
 #include "rxudp.h"
 #include "txudp.h"
 
+#define DEST_HOST "192.168.1.4"
+
 int gAudioChannelNum; // number of audio channels to iterate over
 
 WootTx tx;

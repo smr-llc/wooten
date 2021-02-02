@@ -4,14 +4,15 @@
 #include <sys/time.h>
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "config.h"
 #include "txudp.h"
 
 WootTx::WootTx() :
 	m_sock(0),
-	m_writePos(0),
-	m_readPos(0)
+	m_readPos(0),
+	m_writePos(0)
 {
 	
 }
@@ -46,20 +47,25 @@ void WootTx::txUdp(void* txArg) {
 	fflush(stdout);
 
 	char bufBuf[NETBUFF_BYTES];
+	int16_t buf16[NETBUFF_SAMPLES];
 	
 	while(!Bela_stopRequested())
 	{
 		int diff = tx->m_writePos - tx->m_readPos;
 		if (diff >= NETBUFF_SAMPLES || diff < 0) {
-			memcpy(bufBuf, (char*)(&tx->m_buf[tx->m_readPos]), NETBUFF_BYTES);
+			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
+				buf16[i] = (int16_t)(tx->m_buf[tx->m_readPos + i] * 32767.0);
+			}
+			tx->m_readPos += NETBUFF_SAMPLES;
+			tx->m_readPos %= RINGBUFF_SAMPLES;
+
+			memcpy(bufBuf, buf16, NETBUFF_BYTES);
 			sendto(tx->m_sock,
 					bufBuf,
 					NETBUFF_BYTES,
 					0,
 					(struct sockaddr *) &tx->m_peerAddr,
 					tx->m_peerAddrLen);
-			tx->m_readPos += NETBUFF_SAMPLES;
-			tx->m_readPos %= RINGBUFF_SAMPLES;
 		}
 		else {
 			usleep(150);

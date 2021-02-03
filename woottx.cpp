@@ -58,7 +58,7 @@ void WootTx::txUdp(void* txArg) {
 			pkt.header.seq = seq++;
 
 			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				pkt.samples[0][i] = (int16_t)(tx->m_buf[tx->m_readPos + i] * 32767.0);
+				pkt.samples[i] = (int16_t)(tx->m_buf[tx->m_readPos + i] * 32767.0);
 			}
 			tx->m_readPos += NETBUFF_SAMPLES;
 			tx->m_readPos %= RINGBUFF_SAMPLES;

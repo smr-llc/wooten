@@ -51,6 +51,8 @@ void WootRx::rxUdp(void* rxArg) {
 	printf("Starting rxUdp...\n");
 	fflush(stdout);
 
+	printf("Payload size: %d\n", sizeof(WootPkt));
+
     WootPkt pkt;
 	int lastSeq = -1;
 
@@ -91,7 +93,7 @@ void WootRx::rxUdp(void* rxArg) {
 			lastSeq = pkt.header.seq;
 
 			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				rx->m_buf[rx->m_writePos + i] = ((float)pkt.samples[0][i]) / 32768.0f;
+				rx->m_buf[rx->m_writePos + i] = ((float)pkt.samples[i]) / 32768.0f;
 			}
 			rx->m_writePos += NETBUFF_SAMPLES;
 			rx->m_writePos %= RINGBUFF_SAMPLES;

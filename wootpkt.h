@@ -10,5 +10,5 @@ typedef struct {
 
 typedef struct {
     WootPktHeader header;
-    char samples[NETBUFF_REDUNDANCY][NETBUFF_SAMPLES];
+    int16_t samples[NETBUFF_SAMPLES];
 } WootPkt;

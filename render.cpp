@@ -5,7 +5,7 @@
 #include "wootrx.h"
 #include "woottx.h"
 
-#define DEST_HOST "73.129.184.51"
+#define DEST_HOST "192.168.1.202"
 
 int gAudioChannelNum; // number of audio channels to iterate over
 

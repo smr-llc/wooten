@@ -6,7 +6,8 @@
 #include <errno.h>
 
 #include "config.h"
-#include "rxudp.h"
+#include "wootrx.h"
+#include "wootpkt.h"
 
 
 WootRx::WootRx() :
@@ -22,7 +23,7 @@ int WootRx::init(int port) {
 
 	if ((m_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
-		printf("failed to create udp receive socket, got errno %d\n", errno);
+		printf("FATAL: Failed to create udp receive socket, got errno %d\n", errno);
 		fflush(stdout);
 		return 1;
 	}
@@ -35,7 +36,7 @@ int WootRx::init(int port) {
 
 	if( bind(m_sock, (struct sockaddr*)&addr, sizeof(addr) ) == -1)
 	{
-		printf("failed to bind udp receive socket, got errno %d\n", errno);
+		printf("FATAL: Failed to bind udp receive socket, got errno %d\n", errno);
 		fflush(stdout);
 		return 2;
 	}
@@ -50,37 +51,59 @@ void WootRx::rxUdp(void* rxArg) {
 	printf("Starting rxUdp...\n");
 	fflush(stdout);
 
+    WootPkt pkt;
+	int lastSeq = -1;
+
 	while (!Bela_stopRequested()) {
-		rx->readAllUdp();
-		usleep(150);
+
+		while (true) {
+			int nBytes = recvfrom(rx->m_sock,
+									(char*)&pkt,
+									sizeof(WootPkt),
+									MSG_DONTWAIT,
+									(struct sockaddr *) &rx->m_peerAddr,
+									&rx->m_peerSockLen);
+			
+			if (nBytes == 0) {
+				break;
+			}
+			if (nBytes < 0) {
+				if (errno == EAGAIN) {
+					break;
+				}
+				printf("ERROR: Unexpected receive error, got errno %d\n", errno);
+				sleep(3);
+				break;
+			}
+			if (nBytes != sizeof(WootPkt)) {
+				continue;
+			}
+			if (pkt.header.magic != WOOT_PKT_MAGIC) {
+				continue;
+			}
+
+			if (pkt.header.seq > lastSeq + 1) {
+				printf("WARN: Seq skip %d - %d\n", lastSeq, pkt.header.seq);
+			}
+			else if (pkt.header.seq < lastSeq) {
+				printf("WARN: Out of order seq %d - %d\n", lastSeq, pkt.header.seq);
+			}
+			lastSeq = pkt.header.seq;
+
+			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
+				rx->m_buf[rx->m_writePos + i] = ((float)pkt.samples[0][i]) / 32768.0f;
+			}
+			rx->m_writePos += NETBUFF_SAMPLES;
+			rx->m_writePos %= RINGBUFF_SAMPLES;
+		}
+
+		fflush(stdout);
+		usleep(250);
 	}
 
 	printf("Ending rxUdp\n");
 	fflush(stdout);
 }
-
-
-void WootRx::readAllUdp() {
-	while (true) {
-		int nBytes = recvfrom(m_sock,
-								(char*)m_netBuf,
-								NETBUFF_BYTES,
-								MSG_DONTWAIT,
-								(struct sockaddr *) &m_peerAddr,
-								&m_peerSockLen);
-		if (nBytes == NETBUFF_BYTES) {
-			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				m_buf[m_writePos + i] = ((float)m_netBuf[i]) / 32768.0f;
-			}
-			m_writePos += NETBUFF_SAMPLES;
-			m_writePos %= RINGBUFF_SAMPLES;
-		}
-		else {
-			return;
-		}
-	}
-}
-
 
 void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 	int bufSamples = m_writePos - m_readPos;

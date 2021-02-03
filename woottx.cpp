@@ -7,7 +7,8 @@
 #include <stdint.h>
 
 #include "config.h"
-#include "txudp.h"
+#include "woottx.h"
+#include "wootpkt.h"
 
 WootTx::WootTx() :
 	m_sock(0),
@@ -46,27 +47,31 @@ void WootTx::txUdp(void* txArg) {
 	printf("Starting txUdp...\n");
 	fflush(stdout);
 
-	int16_t buf16[NETBUFF_SAMPLES];
+	WootPkt pkt;
+	pkt.header.magic = WOOT_PKT_MAGIC;
+	uint16_t seq = 0;
 	
 	while(!Bela_stopRequested())
 	{
 		int diff = tx->m_writePos - tx->m_readPos;
 		if (diff >= NETBUFF_SAMPLES || diff < 0) {
+			pkt.header.seq = seq++;
+
 			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				buf16[i] = (int16_t)(tx->m_buf[tx->m_readPos + i] * 32767.0);
+				pkt.samples[0][i] = (int16_t)(tx->m_buf[tx->m_readPos + i] * 32767.0);
 			}
 			tx->m_readPos += NETBUFF_SAMPLES;
 			tx->m_readPos %= RINGBUFF_SAMPLES;
 
 			sendto(tx->m_sock,
-					(char*)buf16,
-					NETBUFF_BYTES,
+					(char*)&pkt,
+					sizeof(WootPkt),
 					0,
 					(struct sockaddr *) &tx->m_peerAddr,
 					tx->m_peerAddrLen);
 		}
 		else {
-			usleep(150);
+			usleep(250);
 		}
 	}
 

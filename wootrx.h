@@ -17,13 +17,10 @@ public:
     static void rxUdp(void*);
 
 private:
-    void readAllUdp();
-
     int m_sock;
     int m_readPos;
     int m_writePos;
     struct sockaddr_in m_peerAddr;
 	socklen_t m_peerSockLen;
-    int16_t m_netBuf[NETBUFF_SAMPLES];
     float m_buf[RINGBUFF_SAMPLES];
 };

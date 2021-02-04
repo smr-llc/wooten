@@ -15,7 +15,6 @@ WootTx::WootTx() :
 	m_readPos(0),
 	m_writePos(0)
 {
-	
 }
 
 int WootTx::connect(const char* host, int port) {
@@ -83,7 +82,8 @@ void WootTx::sendFrame(BelaContext *context, int nChan) {
 	for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
 		double val = 0.0;
 		for(unsigned int ch = 0; ch < nChan; ch++){
-			val += audioRead(context, n * DOWNSAMPLE_FACTOR, ch);
+			// downsample to 22.05
+			val += audioRead(context, n * 2, ch);
 		}
 		if (nChan > 0) {
 			val /= nChan;

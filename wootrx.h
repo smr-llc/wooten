@@ -4,12 +4,12 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include "config.h"
-
-#define RX_BUFFERS 2
+#include <liquid/liquid.h>
 
 class WootRx {
 public:
     WootRx();
+    ~WootRx();
 
     int init(int port);
     void writeReceivedFrame(BelaContext *context, int nChan);
@@ -17,6 +17,7 @@ public:
     static void rxUdp(void*);
 
 private:
+    resamp2_crcf m_resampler;
     int m_sock;
     int m_readPos;
     int m_writePos;

@@ -15,6 +15,11 @@ WootRx::WootRx() :
 	m_readPos(0),
 	m_writePos(0)
 {
+	m_resampler = resamp2_crcf_create(4, 0.0f, 60.0f);
+}
+
+WootRx::~WootRx() {
+	resamp2_crcf_destroy(m_resampler);
 }
 
 
@@ -125,10 +130,16 @@ void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
 		}
 	}
 	else {
+		liquid_float_complex upsampled[2];
+		liquid_float_complex sample;
+		sample.imag = 0.0f;
 		for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
 			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n * DOWNSAMPLE_FACTOR, ch, m_buf[m_readPos + n]);
-				audioWrite(context, n * DOWNSAMPLE_FACTOR + 1, ch, m_buf[m_readPos + n]);
+				sample.real = m_buf[m_readPos + n];
+				// upsample/interpolate from 22.05 back to 44.1
+				resamp2_crcf_interp_execute(m_resampler, sample, upsampled);
+				audioWrite(context, n * 2, ch, upsampled[0].real);
+				audioWrite(context, n * 2 + 1, ch, upsampled[1].real);
 			}
 		}
 		m_readPos += NETBUFF_SAMPLES;

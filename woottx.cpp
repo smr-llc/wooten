@@ -17,9 +17,7 @@ WootTx::WootTx() :
 {
 }
 
-int WootTx::connect(const char* host, int port) {
-	m_peerAddrLen = sizeof(m_peerAddr);
-
+int WootTx::init(struct in_addr peerAddr, in_port_t port) {
 	if ( (m_sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP)) == -1)
 	{
 		printf("Failed to create outgoing udp socket!\n");
@@ -27,17 +25,24 @@ int WootTx::connect(const char* host, int port) {
 		return 1;	
 	}
 
+	m_peerAddrLen = sizeof(m_peerAddr);
 	memset((char *) &m_peerAddr, 0, m_peerAddrLen);
 	m_peerAddr.sin_family = AF_INET;
-	m_peerAddr.sin_port = htons(port);
-	if (inet_aton(host, &m_peerAddr.sin_addr) == 0) 
-	{
-		printf("Failed to resolve peer address!\n");
-		fflush(stdout);
-		return 2;
-	}
+	m_peerAddr.sin_port = port;
+	m_peerAddr.sin_addr = peerAddr;
 
 	return 0;
+}
+
+int WootTx::levelMeterCount() {
+	return 2;
+}
+
+LevelMeter * const WootTx::levelMeter(int channel) {
+	if (channel >= 0 && channel < levelMeterCount()) {
+		return &m_meters[channel];
+	}
+	return nullptr;
 }
 
 void WootTx::txUdp(void* txArg) {
@@ -78,17 +83,16 @@ void WootTx::txUdp(void* txArg) {
 	fflush(stdout);
 }
 
-void WootTx::sendFrame(BelaContext *context, int nChan) {
+void WootTx::sendFrame(BelaContext *context) {
 	for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
-		double val = 0.0;
-		for(unsigned int ch = 0; ch < nChan; ch++){
+		float val = 0.0;
+		for(unsigned int ch = 0; ch < 2; ch++){
 			// downsample to 22.05
-			val += audioRead(context, n * 2, ch);
+			float sample = audioRead(context, n * 2, ch);
+			val += sample;
+			m_meters[ch].feedSample(sample);
 		}
-		if (nChan > 0) {
-			val /= nChan;
-		}
-		m_buf[m_writePos + n] = (float)val;
+		m_buf[m_writePos + n] = val / 2.0f;
 	}
 	m_writePos += NETBUFF_SAMPLES;
 	m_writePos %= RINGBUFF_SAMPLES;

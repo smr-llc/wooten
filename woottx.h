@@ -2,19 +2,24 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <mutex>
+
 #include "config.h"
+#include "levelmeter.h"
 
 class WootTx {
 public:
     WootTx();
 
-    int connect(const char* host, int port);
-    void sendFrame(BelaContext *context, int nChan);
+    int init(struct in_addr peerAddr, in_port_t port);
+    void sendFrame(BelaContext *context);
 
     static void txUdp(void*);
 
+    int levelMeterCount();
+    LevelMeter * const levelMeter(int channel);
+
 private:
+    LevelMeter m_meters[2];
     int m_sock;
     int m_readPos;
     int m_writePos;

@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 
 #include "config.h"
 #include "wootrx.h"
@@ -13,7 +14,8 @@
 WootRx::WootRx() :
 	m_sock(0),
 	m_readPos(0),
-	m_writePos(0)
+	m_writePos(0),
+	m_rxQueueSize(8)
 {
 	m_resampler = resamp2_crcf_create(4, 0.0f, 60.0f);
 }
@@ -22,8 +24,7 @@ WootRx::~WootRx() {
 	resamp2_crcf_destroy(m_resampler);
 }
 
-
-int WootRx::init(int port) {
+int WootRx::init(in_port_t port) {
 	m_peerSockLen = sizeof(m_peerAddr);
 
 	if ((m_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
@@ -36,7 +37,7 @@ int WootRx::init(int port) {
 	struct sockaddr_in addr;
 	memset((char *) &addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
+	addr.sin_port = port;
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	if( bind(m_sock, (struct sockaddr*)&addr, sizeof(addr) ) == -1)
@@ -49,6 +50,20 @@ int WootRx::init(int port) {
 	return 0;
 }
 
+LevelMeter * const WootRx::levelMeter() {
+	return &m_meter;
+}
+
+void WootRx::setRxQueueSize(int size) {
+	if (size < 1 || size > MAX_RX_QUEUE_SIZE) {
+		return;
+	}
+	m_rxQueueSize = size;
+}
+
+int WootRx::rxQueueSize() const {
+	return m_rxQueueSize;
+}
 
 void WootRx::rxUdp(void* rxArg) {
 	WootRx* rx = (WootRx*)rxArg;
@@ -112,35 +127,29 @@ void WootRx::rxUdp(void* rxArg) {
 	fflush(stdout);
 }
 
-void WootRx::writeReceivedFrame(BelaContext *context, int nChan) {
+void WootRx::writeReceivedFrame(BelaContext *context, Mixer &mixer) {
 	int bufSamples = m_writePos - m_readPos;
 	if (bufSamples < 0) {
 		bufSamples += RINGBUFF_SAMPLES;
 	}
-	if (bufSamples > (NETBUFF_SAMPLES * RX_QUEUE_SIZE)) {
-		m_readPos += (RINGBUFF_SAMPLES + bufSamples) - (NETBUFF_SAMPLES * RX_QUEUE_SIZE);
+	if (bufSamples > (NETBUFF_SAMPLES * m_rxQueueSize)) {
+		m_readPos += (RINGBUFF_SAMPLES + bufSamples) - (NETBUFF_SAMPLES * m_rxQueueSize);
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	if (bufSamples < NETBUFF_SAMPLES) {
-		for(unsigned int n = 0; n < context->audioFrames; n++) {
-			for(unsigned int ch = 0; ch < nChan; ch++) {
-				audioWrite(context, n, ch, 0);
-			}
-		}
-	}
-	else {
+	mixer.addLayer();
+	if (bufSamples >= NETBUFF_SAMPLES) {
 		liquid_float_complex upsampled[2];
 		liquid_float_complex sample;
 		sample.imag = 0.0f;
 		for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
-			for(unsigned int ch = 0; ch < nChan; ch++) {
-				sample.real = m_buf[m_readPos + n];
-				// upsample/interpolate from 22.05 back to 44.1
-				resamp2_crcf_interp_execute(m_resampler, sample, upsampled);
-				audioWrite(context, n * 2, ch, upsampled[0].real);
-				audioWrite(context, n * 2 + 1, ch, upsampled[1].real);
-			}
+			sample.real = m_buf[m_readPos + n];
+			// upsample/interpolate from 22.05 back to 44.1
+			resamp2_crcf_interp_execute(m_resampler, sample, upsampled);
+			mixer.writeSample(n * 2, upsampled[0].real);
+			mixer.writeSample(n * 2 + 1, upsampled[1].real);
+			m_meter.feedSample(upsampled[0].real);
+			m_meter.feedSample(upsampled[1].real);
 		}
 		m_readPos += NETBUFF_SAMPLES;
 		m_readPos %= RINGBUFF_SAMPLES;

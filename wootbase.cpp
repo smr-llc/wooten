@@ -49,6 +49,7 @@ void WootBase::processFrame(BelaContext *context) {
 		int connectionBufferOffset = 10;
 		for (Connection* connection : m_connections) {
 			int increment = connection->writeToGuiBuffer(m_gui, connectionBufferOffset);
+			connection->readFromGuiBuffer(m_gui);
 			connectionBufferOffset += increment;
 		}
 
@@ -58,27 +59,6 @@ void WootBase::processFrame(BelaContext *context) {
 		m_monitorSelf = (guiData[0] == 1) ? true : false;
 		m_monitorSelfLevel = ((float)guiData[1]) / 1000.0f;
 	}
-
-
-	// if (tx.levelMeter(0)->shouldRead()) {
-	// 	if (rx.levelMeter()->shouldRead()) {
-	// 		gui.sendBuffer(0, (unsigned int)(rx.levelMeter()->avg() * 10000.0f));
-	// 		gui.sendBuffer(1, (unsigned int)(rx.levelMeter()->takePeak() * 10000.0f));
-	// 		gui.sendBuffer(2, (unsigned int)(rx.levelMeter()->heldPeak() * 10000.0f));
-	// 	}
-	// 	gui.sendBuffer(3, (unsigned int)(tx.levelMeter(0)->avg() * 10000.0f));
-	// 	gui.sendBuffer(4, (unsigned int)(tx.levelMeter(0)->takePeak() * 10000.0f));
-	// 	gui.sendBuffer(5, (unsigned int)(tx.levelMeter(0)->heldPeak() * 10000.0f));
-	// 	gui.sendBuffer(6, (unsigned int)(tx.levelMeter(1)->avg() * 10000.0f));
-	// 	gui.sendBuffer(7, (unsigned int)(tx.levelMeter(1)->takePeak() * 10000.0f));
-	// 	gui.sendBuffer(8, (unsigned int)(tx.levelMeter(1)->heldPeak() * 10000.0f));
-
-	// 	DataBuffer& buffer = gui.getDataBuffer(0);
-	// 	int* guiData = buffer.getAsInt();
-	// 	rx.setRxQueueSize(guiData[0]);
-	// 	rx.setMonitorSelf((guiData[1] == 1) ? true : false);
-	// 	rx.setMonitorSelfLevel(((float)guiData[2]) / 1000.0f);
-	// }
 }
 
 void WootBase::auxProcess(void *selfArg) {
@@ -142,5 +122,6 @@ void WootBase::addConnection(const char* host) {
     if (conn->connect(host) != 0) {
         delete conn;
     }
+	conn->initializeReadBuffer(m_gui);
     m_connections.push_back(conn);
 }

@@ -1,6 +1,8 @@
 
 let buf = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
+let connections = [];
+
 function setup() {
 	//Create a canvas of dimensions given by current browser window
 	createCanvas(windowWidth, windowHeight);
@@ -24,6 +26,8 @@ function setup() {
 
 function drawLevelBar(x, y, maxW, maxH, avg, peak, heldPeak) {
 	noStroke();
+	fill(20);
+	rect(x, y, maxW, maxH);
 	fill(25, 150, 25);
 	rect(x, y, maxW * peak, maxH);
 	fill(50, 200, 50);
@@ -35,6 +39,55 @@ function drawLevelBar(x, y, maxW, maxH, avg, peak, heldPeak) {
 	rect(x + maxW * .99 * heldPeak, y, maxW*0.01, maxH);
 }
 
+function createConnection(x, y, w, h, readBuf, writeBuf) {
+	let rowH = 0.25 * h;
+	let colW = 0.05 * w
+
+	let rxLevelSlider = createSlider(1, 1000, 900);
+	let rxQueueSlider = createSlider(1, 32, 8);
+	elRect(rxLevelSlider, colW*12, y + rowH, colW*7, rowH);
+	elRect(rxQueueSlider, colW*4, y + rowH*2, colW*15, rowH);
+
+	return {
+		x: x,
+		y: y,
+		w: w,
+		h: h,
+		readBuf: readBuf,
+		writeBuf: writeBuf,
+		levelSlider: rxLevelSlider,
+		queueSlider: rxQueueSlider
+	}
+}
+
+function drawConnection(c) {
+	let rowH = 0.25 * c.h;
+	let colW = 0.05 * c.w;
+
+	let name = Bela.data.buffers[c.readBuf];
+	let lvlBuf = Bela.data.buffers[c.readBuf+1];
+	let sendBuf = [c.queueSlider.value(), c.levelSlider.value()];
+
+	// draw background panel
+    fill(40);
+    noStroke();
+    rect(c.x, c.y, c.w, c.h);
+
+	// draw level bar
+	if (lvlBuf) {
+		drawLevelBar(c.x + colW*4, c.y+rowH, colW*7.0, rowH, lvlBuf[0], lvlBuf[1], lvlBuf[2]);
+	}
+	fill(200);
+	textSize(fontSize(colW, rowH));
+	textAlign(RIGHT);
+	text(name.join("") + " Level:", c.x, c.y+rowH, colW*3.5, rowH);
+	text("Speed <-> Quality", c.x, c.y+rowH*2, colW*3.5, rowH);
+
+	Bela.data.sendBuffer(c.writeBuf, 'int', sendBuf);
+
+	return 2; // number of read buffers read
+}
+
 function draw() {
     background(60);
 
@@ -44,45 +97,30 @@ function draw() {
 	let rowH = 0.025 * windowHeight;
 	let colW = 0.05 * windowWidth
 
-    fill(20);
-    noStroke();
-    rect(colW*5, rowH*1, colW*10, rowH);
-    // rect(colW*5, rowH*4, colW*8, rowH);
-
-	// if (inAvgLevel >= 0) {
-	// 	drawLevelBar(colW*5, rowH*4, colW*8.0, rowH, inAvgLevel, inPeakLevel, inHeldPeakLevel);
-	// }
 	if (inL) {
-		drawLevelBar(colW*5, rowH*1, colW*10.0, rowH*0.5, inL[0], inL[1], inL[2]);
-		drawLevelBar(colW*5, rowH*1.5, colW*10.0, rowH*0.5, inR[0], inR[1], inR[2]);
+		drawLevelBar(colW*4, rowH*1, colW*15.0, rowH*0.5, inL[0], inL[1], inL[2]);
+		drawLevelBar(colW*4, rowH*1.5, colW*15.0, rowH*0.5, inR[0], inR[1], inR[2]);
 	}
 
-
 	fill(200);
-	textSize(Math.min(rowH/1.5, colW*2));
+	textSize(fontSize(colW, rowH));
 	textAlign(RIGHT);
-	text("Send Level:", 0, rowH*1, colW*5, rowH);
-
+	text("Send Level:", 0, rowH*1, colW*3.5, rowH);
 
 	let rxCount = Bela.data.buffers[9];
 	if (rxCount > 0) {
-		let bufOffset = 10;
+		let readBufOffset = 10;
+		let writeBufOffset = 1;
 		let rowOffset = rowH*9;
 		for (let i = 0; i < rxCount; i++) {
-			let lvlBuf = Bela.data.buffers[bufOffset];
-
-			fill(20);
-			noStroke();
-			rect(colW*5, rowOffset, colW*10, rowH);
-			drawLevelBar(colW*5, rowOffset, colW*10.0, rowH, lvlBuf[0], lvlBuf[1], lvlBuf[2]);
-
-			fill(200);
-			textSize(Math.min(rowH/1.5, colW*2));
-			textAlign(RIGHT);
-			text("Receive Level:", 0, rowOffset, colW*5, rowH);
-
-			rowOffset += rowH * 3;
-			bufOffset += 1;
+			if ((i + 1) > connections.length) {
+				connections.push(createConnection(0, rowOffset, colW*20, rowH*4, readBufOffset, writeBufOffset));
+			}
+			let read = drawConnection(connections[i]);
+			
+			rowOffset += rowH * 4.5;
+			readBufOffset += read;
+			writeBufOffset += 1;
 		}
 	}
 
@@ -102,25 +140,15 @@ function formatDOMElements() {
 	let rowH = 0.025 * windowHeight;
 	let colW = 0.05 * windowWidth
 
-	monitorSelfToggle.position(colW, rowH*4);
-	monitorSelfToggle.style('font', (rowH/1.5) + 'px "Courier New"');
+	monitorSelfToggle.style('font',  pxFont(colW, rowH) + ' "Courier New"');
 	monitorSelfToggle.style('color', color(200));
-	monitorSelfToggle.style('text-align', 'center');
-	monitorSelfToggle.style('width', int(colW*4).toString()+'px');
-	//monitorSelfToggle.style('height', int(rowH).toString()+'px');
+	monitorSelfToggle.style('text-align', 'right');
 
-	monitorSelfSlider.position(colW*5, rowH*4);
-	monitorSelfSlider.style('width', int(colW*14).toString()+'px');
-	monitorSelfSlider.style('height', int(rowH).toString()+'px');
+	elRect(monitorSelfToggle, colW, rowH*3, colW*2.5, rowH);
+	elRect(monitorSelfSlider, colW*4, rowH*3, colW*15, rowH);
 
-
-	peerInput.position(colW, rowH*7);
-	peerInput.style('width', int(colW*4.5).toString()+'px');
-	peerInput.style('height', int(rowH).toString()+'px');
-
-	addPeer.position(colW*6, rowH*7);
-	addPeer.style('width', int(colW*4.5).toString()+'px');
-	addPeer.style('height', int(rowH).toString()+'px');
+	elRect(peerInput, colW, rowH*6, colW*2.5, rowH);
+	elRect(addPeer, colW*4, rowH*6, colW*3, rowH);
 
 	// qualitySlider.position(colW, rowH*8);
   	// qualitySlider.style('width', int(colW*18).toString()+'px');
@@ -143,4 +171,22 @@ function addConnection() {
 		"host": peerInput.value()
 	}
 	Bela.control.send(addRequest);
+}
+
+function pxStr(val) {
+	return int(val).toString()+'px'
+}
+
+function elRect(el, x, y, w, h) {
+	el.position(x, y);
+	el.style('width', pxStr(w));
+	el.style('height', pxStr(h));
+}
+
+function fontSize(colW, rowH) {
+	return Math.min(rowH/1.5, colW*2);
+}
+
+function pxFont(colW, rowH) {
+	return pxStr(fontSize(colW, rowH));
 }

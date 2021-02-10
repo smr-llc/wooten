@@ -15,7 +15,8 @@ WootRx::WootRx() :
 	m_sock(0),
 	m_readPos(0),
 	m_writePos(0),
-	m_rxQueueSize(8)
+	m_rxQueueSize(8),
+	m_rxLevel(0.9)
 {
 	m_resampler = resamp2_crcf_create(4, 0.0f, 60.0f);
 }
@@ -63,6 +64,17 @@ void WootRx::setRxQueueSize(int size) {
 
 int WootRx::rxQueueSize() const {
 	return m_rxQueueSize;
+}
+
+void WootRx::setRxLevel(float level) {
+	if (level < 0.0f) {
+		return;
+	}
+	m_rxLevel = level;
+}
+
+float WootRx::rxLevel() const {
+	return m_rxLevel;
 }
 
 void WootRx::rxUdp(void* rxArg) {
@@ -137,7 +149,7 @@ void WootRx::writeReceivedFrame(BelaContext *context, Mixer &mixer) {
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	mixer.addLayer();
+	mixer.addLayer(m_rxLevel);
 	if (bufSamples >= NETBUFF_SAMPLES) {
 		liquid_float_complex upsampled[2];
 		liquid_float_complex sample;

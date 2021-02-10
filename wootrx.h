@@ -26,6 +26,9 @@ public:
     void setRxQueueSize(int size);
     int rxQueueSize() const;
 
+    void setRxLevel(float level);
+    float rxLevel() const;
+
 private:
     LevelMeter m_meter;
     resamp2_crcf m_resampler;
@@ -36,4 +39,5 @@ private:
 	socklen_t m_peerSockLen;
     float m_buf[RINGBUFF_SAMPLES];
     int m_rxQueueSize;
+    float m_rxLevel;
 };

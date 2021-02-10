@@ -9,6 +9,8 @@ int Connection::connect(const char * host) {
 	printf("Attempting to create new peer connection with %s...\n", host);
     fflush(stdout);
 
+    m_host = host;
+
     PortAssignment assignment;
     if (PortBroker::getPortAssignmentForHost(host, assignment) != 0) {
 		printf("ERROR: Failed to negotiate connection with host\n");
@@ -50,9 +52,30 @@ void Connection::processFrame(BelaContext *context, Mixer &mixer) {
     m_rx.writeReceivedFrame(context, mixer);
 }
 
+void Connection::initializeReadBuffer(Gui &gui) {
+    m_guiReadBuffer = gui.setBuffer('d', 5);
+}
+
 int Connection::writeToGuiBuffer(Gui &gui, int offset) {
-    m_rx.levelMeter()->writeToGuiBuffer(gui, offset);
-    return 1;
+    std::vector<char> nameVec(m_host.begin(), m_host.end()); 
+    gui.sendBuffer(offset, nameVec);
+    m_rx.levelMeter()->writeToGuiBuffer(gui, offset+1);
+    return 2;
+}
+
+void Connection::readFromGuiBuffer(Gui &gui) {
+    DataBuffer& buffer = gui.getDataBuffer(m_guiReadBuffer);
+    int* guiData = buffer.getAsInt();
+    int rxQSize = guiData[0];
+    float rxLevel = ((float)guiData[1]) / 1000.0f;
+
+    if (rxQSize > 0) {
+        m_rx.setRxQueueSize(rxQSize);
+    }
+
+    if (rxLevel >= 0.0f) {
+        m_rx.setRxLevel(rxLevel);
+    }
 }
 
 void Connection::setRxQueueSize(int size) {

@@ -37,6 +37,9 @@ Then navigate to the GUI in a web browser at 192.168.7.2/gui
 
 Tested with Bela image 0.3.8b
 
+Current tests show ~4ms round-trip latency on a LAN, and ~45ms round-trip from
+Verizion FiOS (fiber) to Comcast XFinity (cable) in the Baltimore area.
+
 Refer to bela docs for details on how to run a program at startup.
 
 Please report bugs and ideas in the GitHub issues.

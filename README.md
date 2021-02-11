@@ -40,3 +40,5 @@ Tested with Bela image 0.3.8b
 Refer to bela docs for details on how to run a program at startup.
 
 Please report bugs and ideas in the GitHub issues.
+
+![Screenshot of the wooten GUI](docs/wooten-gui.png)

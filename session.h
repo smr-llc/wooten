@@ -11,11 +11,13 @@
 #include <atomic>
 #include <vector>
 
+class WootBase;
+
 class Session {
 public:
     Session();
 
-    int setup(Gui &gui);
+    int setup(WootBase *wootBase);
 
     void start(std::string sessId = "");
     void stop();
@@ -45,5 +47,5 @@ private:
 
     JoinedData m_myJoinedData;
 
-    Gui &m_gui;
+    WootBase *m_wootBase;
 };

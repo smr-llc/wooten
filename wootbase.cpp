@@ -9,7 +9,7 @@ int WootBase::setup(BelaContext *context) {
 	m_coreBuffer = m_gui.setBuffer('d', 10);
 	printf("Core Buffer ID: %d\n", m_coreBuffer);
 
-	if (m_session.setup(m_gui) != 0) {
+	if (m_session.setup(this) != 0) {
 		return -1;
 	}
 
@@ -67,6 +67,10 @@ void WootBase::processFrame(BelaContext *context) {
 		m_monitorSelf = (guiData[0] == 1) ? true : false;
 		m_monitorSelfLevel = ((float)guiData[1]) / 1000.0f;
 	}
+}
+
+Gui& WootBase::gui() {
+	return m_gui;
 }
 
 void WootBase::auxProcess(void *selfArg) {

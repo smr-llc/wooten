@@ -14,6 +14,8 @@
 #include <signal.h>
 #include <iostream>
 
+#include "wootbase.h"
+
 Session::Session() :
     m_udpActive(false),
     m_managerActive(false),
@@ -22,8 +24,8 @@ Session::Session() :
     memset(&m_myJoinedData, 0, sizeof(JoinedData));
 }
 
-int Session::setup(Gui &gui) {
-    m_gui = gui;
+int Session::setup(WootBase *wootBase) {
+    m_wootBase = wootBase;
     if ((m_rxSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
 		printf("FATAL: Failed to create udp receive socket, got errno %d\n", errno);
@@ -74,11 +76,11 @@ void Session::processFrame(BelaContext *context, Mixer &mixer) {
 
 void Session::writeToGuiBuffer() {
     std::lock_guard<std::mutex> guard(m_connMutex);
-    m_gui.sendBuffer(9, m_connections.size());
+    m_wootBase->gui().sendBuffer(9, m_connections.size());
     int connectionBufferOffset = 10;
     for (auto &pair : m_connections) {
-        int increment = pair.second->writeToGuiBuffer(m_gui, connectionBufferOffset);
-        pair.second->readFromGuiBuffer(m_gui);
+        int increment = pair.second->writeToGuiBuffer(m_wootBase->gui(), connectionBufferOffset);
+        pair.second->readFromGuiBuffer(m_wootBase->gui());
         connectionBufferOffset += increment;
     }
 }
@@ -310,7 +312,7 @@ void Session::manageSessionImpl() {
                         delete c;
                     }
                     else {
-                        c->initializeReadBuffer(m_gui);
+                        c->initializeReadBuffer(m_wootBase->gui());
                         std::lock_guard<std::mutex> guard(m_connMutex);
                         m_connections[joinedId] = c;
                     }

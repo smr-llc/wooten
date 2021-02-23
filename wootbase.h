@@ -17,6 +17,8 @@ public:
     static void auxProcess(void *selfArg);
     static bool guiControlHandler(JSONObject &json, void *selfArg);
 
+    Gui& gui();
+
 private:
     LevelMeter m_inputMeters[2];
     void auxProcessImpl();

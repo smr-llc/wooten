@@ -305,29 +305,43 @@ void Session::manageSessionImpl() {
             if (pkt.type == PTYPE_JOINED) {
                 memcpy(&joined, pkt.data, sizeof(JoinedData));
                 std::string joinedId(joined.connId, 6);
-                auto it = m_connections.find(joinedId);
-                if (it == m_connections.end()) {
+                std::map<std::string,Connection*>::iterator it;
+                bool makeNew = false;
+                {
+                    std::lock_guard<std::mutex> guard(m_connMutex);
+                    it = m_connections.find(joinedId);
+                    makeNew = (it == m_connections.end());
+                }
+                if (makeNew) {
                     Connection *c = new Connection();
                     if (c->connect(joined, m_myJoinedData) != 0) {
                         delete c;
                     }
                     else {
                         c->initializeReadBuffer(m_wootBase->gui());
-                        std::lock_guard<std::mutex> guard(m_connMutex);
-                        m_connections[joinedId] = c;
+                        {
+                            std::lock_guard<std::mutex> guard(m_connMutex);
+                            m_connections[joinedId] = c;
+                        }
                     }
                 }
             }
             else if (pkt.type == PTYPE_LEFT) {
-                memcpy(&joined, pkt.data, sizeof(JoinedData));
-                std::string leftId(joined.connId, 6);
-                auto it = m_connections.find(leftId);
-                if (it != m_connections.end()) {
-                    {
-                        std::lock_guard<std::mutex> guard(m_connMutex);
-                        m_connections.erase(it);
+                Connection *toDelete = nullptr;
+                {
+                    std::lock_guard<std::mutex> guard(m_connMutex);
+                    memcpy(&joined, pkt.data, sizeof(JoinedData));
+                    std::string leftId(joined.connId, 6);
+                    auto it = m_connections.find(leftId);
+                    if (it != m_connections.end()) {
+                        {
+                            m_connections.erase(it);
+                        }
+                        toDelete = it->second;
                     }
-                    delete it->second;
+                }
+                if (toDelete) {
+                    delete toDelete;
                 }
             }
         }
@@ -375,17 +389,27 @@ void Session::rxUdpImpl() {
 				break;
 			}
 			if (nBytes != sizeof(WootPkt)) {
+				printf("Bad size %d\n", nBytes);
 				continue;
 			}
 			if (pkt.header.magic != WOOT_PKT_MAGIC) {
+				printf("Bad magic %d\n", int(pkt.header.magic));
 				continue;
 			}
 
 			std::string connId(pkt.header.connId, 6);
-			auto it = m_connections.find(connId);
-			if (it != m_connections.end()) {
-				it->second->handleFrame(pkt);
-			}
+            printf("got Pkt from %s\n", connId.c_str());
+            {
+                std::lock_guard<std::mutex> guard(m_connMutex);
+                for (auto pair : m_connections) {
+                    printf("conn key %s\n", pair.first.c_str());
+                }
+                auto it = m_connections.find(connId);
+                if (it != m_connections.end()) {
+                    printf("processing Pkt from %s\n", connId.c_str());
+                    it->second->handleFrame(pkt);
+                }
+            }
 		}
 
 		fflush(stdout);

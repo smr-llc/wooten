@@ -13,7 +13,8 @@
 WootTx::WootTx() :
 	m_sock(0),
 	m_readPos(0),
-	m_writePos(0)
+	m_writePos(0),
+	m_stop(false)
 {
 }
 
@@ -40,6 +41,10 @@ int WootTx::levelMeterCount() {
 	return 2;
 }
 
+void WootTx::stop() {
+	m_stop = true;
+}
+
 LevelMeter * const WootTx::levelMeter(int channel) {
 	if (channel >= 0 && channel < levelMeterCount()) {
 		return &m_meters[channel];
@@ -49,6 +54,7 @@ LevelMeter * const WootTx::levelMeter(int channel) {
 
 void WootTx::txUdp(void* txArg) {
 	WootTx *tx = (WootTx*)txArg;
+	tx->m_stop = false;
 
 	if (tx->m_connId.size() == 0) {
 		printf("Cannot start txUdp without connection ID...\n");
@@ -56,7 +62,7 @@ void WootTx::txUdp(void* txArg) {
 		return;
 	}
 
-	printf("Starting txUdp for connection %s...\n", tx->m_connId.c_str());
+	printf("Starting txUdp for %s on %d...\n", inet_ntoa(tx->m_peerAddr.sin_addr), ntohs(tx->m_peerAddr.sin_port));
 	fflush(stdout);
 
 	WootPkt pkt;
@@ -64,7 +70,7 @@ void WootTx::txUdp(void* txArg) {
 	memcpy(pkt.header.connId, tx->m_connId.c_str(), 6);
 	uint16_t seq = 0;
 	
-	while(!Bela_stopRequested())
+	while(!Bela_stopRequested() && !tx->m_stop)
 	{
 		int diff = tx->m_writePos - tx->m_readPos;
 		if (diff >= NETBUFF_SAMPLES || diff < 0) {

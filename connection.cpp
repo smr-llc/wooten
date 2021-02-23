@@ -7,6 +7,10 @@ Connection::Connection() {
 
 }
 
+Connection::~Connection() {
+    m_tx.stop();
+}
+
 int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
     m_connId = std::string(data.connId, 6);
     struct in_addr host;
@@ -26,7 +30,8 @@ int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
 	printf("Attempting to create new peer connection with %s on port %d...\n", m_host.c_str(), portNum);
     fflush(stdout);
 
-    int result = m_tx.init(host, data.port, m_connId);
+    std::string sessionConnId = std::string(sessionData.connId, 6);
+    int result = m_tx.init(host, data.port, sessionConnId);
     if (result != 0) {
 		printf("ERROR: Failed to initialize connection tx component\n");
         return result;

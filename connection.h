@@ -11,6 +11,7 @@
 class Connection {
 public:
     Connection();
+    ~Connection();
 
     int connect(const JoinedData &data, const JoinedData &sessionData);
     void handleFrame(const WootPkt &pkt);

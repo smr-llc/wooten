@@ -2,6 +2,7 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <atomic>
 
 #include "config.h"
 #include "levelmeter.h"
@@ -15,6 +16,8 @@ public:
 
     static void txUdp(void*);
 
+    void stop();
+
     int levelMeterCount();
     LevelMeter * const levelMeter(int channel);
 
@@ -23,6 +26,7 @@ private:
     int m_sock;
     int m_readPos;
     int m_writePos;
+    std::atomic<bool> m_stop;
     std::string m_connId;
     struct sockaddr_in m_peerAddr;
 	socklen_t m_peerAddrLen;

@@ -15,12 +15,12 @@ class Session {
 public:
     Session();
 
-    int setup();
+    int setup(Gui &gui);
 
     void start(std::string sessId = "");
     void stop();
     void processFrame(BelaContext *context, Mixer &mixer);
-    void writeToGuiBuffer(Gui &gui);
+    void writeToGuiBuffer();
 
     bool isActive() const;
     std::string sessionId() const;
@@ -44,4 +44,6 @@ private:
     AuxiliaryTask m_rxUdpTask;
 
     JoinedData m_myJoinedData;
+
+    Gui &m_gui;
 };

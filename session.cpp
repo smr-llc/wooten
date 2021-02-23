@@ -22,7 +22,8 @@ Session::Session() :
     memset(&m_myJoinedData, 0, sizeof(JoinedData));
 }
 
-int Session::setup() {
+int Session::setup(Gui &gui) {
+    m_gui = gui;
     if ((m_rxSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
 	{
 		printf("FATAL: Failed to create udp receive socket, got errno %d\n", errno);
@@ -71,13 +72,13 @@ void Session::processFrame(BelaContext *context, Mixer &mixer) {
 	}
 }
 
-void Session::writeToGuiBuffer(Gui &gui) {
+void Session::writeToGuiBuffer() {
     std::lock_guard<std::mutex> guard(m_connMutex);
-    gui.sendBuffer(9, m_connections.size());
-    int connectionBufferOffset = 20;
+    m_gui.sendBuffer(9, m_connections.size());
+    int connectionBufferOffset = 10;
     for (auto &pair : m_connections) {
-        int increment = pair.second->writeToGuiBuffer(gui, connectionBufferOffset);
-        pair.second->readFromGuiBuffer(gui);
+        int increment = pair.second->writeToGuiBuffer(m_gui, connectionBufferOffset);
+        pair.second->readFromGuiBuffer(m_gui);
         connectionBufferOffset += increment;
     }
 }
@@ -309,6 +310,7 @@ void Session::manageSessionImpl() {
                         delete c;
                     }
                     else {
+                        c->initializeReadBuffer(m_gui);
                         std::lock_guard<std::mutex> guard(m_connMutex);
                         m_connections[joinedId] = c;
                     }

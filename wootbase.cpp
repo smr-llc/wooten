@@ -9,7 +9,7 @@ int WootBase::setup(BelaContext *context) {
 	m_coreBuffer = m_gui.setBuffer('d', 10);
 	printf("Core Buffer ID: %d\n", m_coreBuffer);
 
-	if (m_session.setup() != 0) {
+	if (m_session.setup(m_gui) != 0) {
 		return -1;
 	}
 
@@ -59,7 +59,7 @@ void WootBase::processFrame(BelaContext *context) {
 			m_gui.sendBuffer(4, std::vector<char>());
 		}
 
-		m_session.writeToGuiBuffer(m_gui);
+		m_session.writeToGuiBuffer();
 
 		// read data from gui
 		DataBuffer& buffer = m_gui.getDataBuffer(m_coreBuffer);

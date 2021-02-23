@@ -1,26 +1,32 @@
 #include "connection.h"
 #include "portbroker.h"
 
+#include <string.h>
+
 Connection::Connection() {
 
 }
 
-int Connection::connect(const char * host) {
-	printf("Attempting to create new peer connection with %s...\n", host);
-    fflush(stdout);
+int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
+    m_connId = std::string(data.connId, 6);
+    struct in_addr host;
 
-    m_host = host;
-
-    PortAssignment assignment;
-    if (PortBroker::getPortAssignmentForHost(host, assignment) != 0) {
-		printf("ERROR: Failed to negotiate connection with host\n");
-        return -1;
+    if (memcmp(&data.publicAddr, &sessionData.publicAddr, sizeof(struct in_addr)) == 0) {
+        if (memcmp(&data.privateAddr, &sessionData.privateAddr, sizeof(struct in_addr)) == 0) {
+            return -1;
+        }
+        memcpy(&host, &data.privateAddr, sizeof(struct in_addr));
     }
+    else {
+        memcpy(&host, &data.publicAddr, sizeof(struct in_addr));
+    }
+    uint16_t portNum = ntohs(data.port);
+    m_host = inet_ntoa(host);
 
-	printf("Got port assignment\n");
+	printf("Attempting to create new peer connection with %s on port %d...\n", m_host.c_str(), portNum);
     fflush(stdout);
 
-    int result = m_tx.init(assignment.peerAddr, assignment.port);
+    int result = m_tx.init(host, data.port, m_connId);
     if (result != 0) {
 		printf("ERROR: Failed to initialize connection tx component\n");
         return result;
@@ -29,22 +35,19 @@ int Connection::connect(const char * host) {
 	printf("Initialized transmitter\n");
     fflush(stdout);
 
-    result = m_rx.init(assignment.port);
-    if (result != 0) {
-		printf("ERROR: Failed to initialize connection rx component\n");
-        return result;
-    }
-
 	printf("Initialized receiver\n");
     fflush(stdout);
 
-	printf("Finished negotiating connection with %s\n", host);
+	printf("Finished negotiating connection with %s\n", m_host.c_str());
     fflush(stdout);
 
 	Bela_runAuxiliaryTask(WootTx::txUdp, 50, &m_tx);
-	Bela_runAuxiliaryTask(WootRx::rxUdp, 50, &m_rx);
 
     return 0;
+}
+
+void Connection::handleFrame(const WootPkt &pkt) {
+    m_rx.handleFrame(pkt);
 }
 
 void Connection::processFrame(BelaContext *context, Mixer &mixer) {
@@ -84,4 +87,8 @@ void Connection::setRxQueueSize(int size) {
 
 int Connection::rxQueueSize() const {
 	return m_rx.rxQueueSize();
+}
+
+std::string Connection::connId() const {
+	return m_connId;
 }

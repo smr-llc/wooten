@@ -16,9 +16,13 @@ function setup() {
 	monitorSelfSlider = createSlider(1, 1000, 900);
   	monitorSelfToggle.changed(checkEnabled);
 
-	peerInput = createInput('');
-	addPeer = createButton('Connect to Peer');
-	addPeer.mousePressed(addConnection);
+	sessionInput = createInput('');
+	joinSessionBtn = createButton('Join Session');
+	joinSessionBtn.mousePressed(joinSession);
+	createSessionBtn = createButton('Create Session');
+	createSessionBtn.mousePressed(createSession);
+	leaveSessionBtn = createButton('Leave Session');
+	leaveSessionBtn.mousePressed(leaveSession);
 
 	formatDOMElements();
 	checkEnabled();
@@ -107,6 +111,23 @@ function draw() {
 	textAlign(RIGHT);
 	text("Send Level:", 0, rowH*1, colW*3.5, rowH);
 
+	let activeSession = Bela.data.buffers[3];
+	let sessionName = Bela.data.buffers[4];
+
+	if (activeSession == 1) {
+		sessionInput.attribute('disabled', 'true');
+		sessionInput.value(sessionName.join(""));
+		joinSessionBtn.attribute('disabled', 'true');
+		createSessionBtn.attribute('disabled', 'true');
+		leaveSessionBtn.removeAttribute('disabled');
+	}
+	else {
+		sessionInput.removeAttribute('disabled');
+		joinSessionBtn.removeAttribute('disabled');
+		createSessionBtn.removeAttribute('disabled');
+		leaveSessionBtn.attribute('disabled', 'true');
+	}
+
 	let rxCount = Bela.data.buffers[9];
 	if (rxCount > 0) {
 		let readBufOffset = 10;
@@ -147,8 +168,10 @@ function formatDOMElements() {
 	elRect(monitorSelfToggle, colW, rowH*3, colW*2.5, rowH);
 	elRect(monitorSelfSlider, colW*4, rowH*3, colW*15, rowH);
 
-	elRect(peerInput, colW, rowH*6, colW*2.5, rowH);
-	elRect(addPeer, colW*4, rowH*6, colW*3, rowH);
+	elRect(sessionInput, colW, rowH*6, colW*2.5, rowH);
+	elRect(joinSessionBtn, colW*4, rowH*6, colW*2.5, rowH);
+	elRect(createSessionBtn, colW*7, rowH*6, colW*2.5, rowH);
+	elRect(leaveSessionBtn, colW*10, rowH*6, colW*2.5, rowH);
 
 	// qualitySlider.position(colW, rowH*8);
   	// qualitySlider.style('width', int(colW*18).toString()+'px');
@@ -165,12 +188,27 @@ function checkEnabled() {
 	}
 }
 
-function addConnection() {
-	let addRequest = {
-		"event": "add-connection",
-		"host": peerInput.value()
+function joinSession() {
+	let joinRequest = {
+		"event": "join-session",
+		"sessionId": sessionInput.value()
 	}
-	Bela.control.send(addRequest);
+	Bela.control.send(joinRequest);
+}
+
+function createSession() {
+	let createRequest = {
+		"event": "join-session",
+		"sessionId": ""
+	}
+	Bela.control.send(createRequest);
+}
+
+function leaveSession() {
+	let leaveRequest = {
+		"event": "leave-session"
+	}
+	Bela.control.send(leaveRequest);
 }
 
 function pxStr(val) {

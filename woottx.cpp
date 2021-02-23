@@ -17,7 +17,7 @@ WootTx::WootTx() :
 {
 }
 
-int WootTx::init(struct in_addr peerAddr, in_port_t port) {
+int WootTx::init(struct in_addr addr, in_port_t port, std::string connId) {
 	if ( (m_sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP)) == -1)
 	{
 		printf("Failed to create outgoing udp socket!\n");
@@ -29,7 +29,9 @@ int WootTx::init(struct in_addr peerAddr, in_port_t port) {
 	memset((char *) &m_peerAddr, 0, m_peerAddrLen);
 	m_peerAddr.sin_family = AF_INET;
 	m_peerAddr.sin_port = port;
-	m_peerAddr.sin_addr = peerAddr;
+	memcpy(&m_peerAddr.sin_addr, &addr, sizeof(struct in_addr));
+
+	m_connId = connId;
 
 	return 0;
 }
@@ -48,11 +50,18 @@ LevelMeter * const WootTx::levelMeter(int channel) {
 void WootTx::txUdp(void* txArg) {
 	WootTx *tx = (WootTx*)txArg;
 
-	printf("Starting txUdp...\n");
+	if (tx->m_connId.size() == 0) {
+		printf("Cannot start txUdp without connection ID...\n");
+		fflush(stdout);
+		return;
+	}
+
+	printf("Starting txUdp for connection %s...\n", tx->m_connId.c_str());
 	fflush(stdout);
 
 	WootPkt pkt;
 	pkt.header.magic = WOOT_PKT_MAGIC;
+	memcpy(pkt.header.connId, tx->m_connId.c_str(), 6);
 	uint16_t seq = 0;
 	
 	while(!Bela_stopRequested())

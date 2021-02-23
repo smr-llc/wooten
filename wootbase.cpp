@@ -1,13 +1,19 @@
 #include "wootbase.h"
 #include <wchar.h>
 
-void WootBase::setup(BelaContext *context) {
+int WootBase::setup(BelaContext *context) {
 	// Setup GUI
 	m_gui.setup(context->projectName);
 	m_gui.setControlDataCallback(WootBase::guiControlHandler, this);
 
 	m_coreBuffer = m_gui.setBuffer('d', 10);
 	printf("Core Buffer ID: %d\n", m_coreBuffer);
+
+	if (m_session.setup() != 0) {
+		return -1;
+	}
+
+	return 0;
 }
 
 void WootBase::processFrame(BelaContext *context) {
@@ -19,11 +25,8 @@ void WootBase::processFrame(BelaContext *context) {
 		}
 	}
 
-
 	// Process input/output audio for each peer connection
-	for (Connection* connection : m_connections) {
-		connection->processFrame(context, m_mixer);
-	}
+	m_session.processFrame(context, m_mixer);
 
 	// Monitor input in output, if enabled
 	if (m_monitorSelf) {
@@ -45,13 +48,18 @@ void WootBase::processFrame(BelaContext *context) {
 		m_inputMeters[0].writeToGuiBuffer(m_gui, 1);
 		m_inputMeters[1].writeToGuiBuffer(m_gui, 2);
 
-		m_gui.sendBuffer(9, m_connections.size());
-		int connectionBufferOffset = 10;
-		for (Connection* connection : m_connections) {
-			int increment = connection->writeToGuiBuffer(m_gui, connectionBufferOffset);
-			connection->readFromGuiBuffer(m_gui);
-			connectionBufferOffset += increment;
+		if (m_session.isActive()) {
+			std::string sessId = m_session.sessionId();
+			std::vector<char> sessIdVec(sessId.begin(), sessId.end());
+			m_gui.sendBuffer(3, 1);
+			m_gui.sendBuffer(4, sessIdVec);
 		}
+		else {
+			m_gui.sendBuffer(3, 0);
+			m_gui.sendBuffer(4, std::vector<char>());
+		}
+
+		m_session.writeToGuiBuffer(m_gui);
 
 		// read data from gui
 		DataBuffer& buffer = m_gui.getDataBuffer(m_coreBuffer);
@@ -108,20 +116,22 @@ bool WootBase::guiControlHandlerImpl(JSONObject &json) {
 
 	std::string event = JSON::ws2s(json[L"event"]->AsString());
 
-	if (event == "add-connection") {
-		addConnection(JSON::ws2s(json[L"host"]->AsString()).c_str());
+	if (event == "join-session") {
+		joinSession(JSON::ws2s(json[L"sessionId"]->AsString()).c_str());
+		return true;
+	}
+	else if (event == "leave-session") {
+		leaveSession();
 		return true;
 	}
 
 	return false;
 }
 
+void WootBase::joinSession(std::string sessionId) {
+	m_session.start(sessionId);
+}
 
-void WootBase::addConnection(const char* host) {
-    Connection *conn = new Connection();
-    if (conn->connect(host) != 0) {
-        delete conn;
-    }
-	conn->initializeReadBuffer(m_gui);
-    m_connections.push_back(conn);
+void WootBase::leaveSession() {
+	m_session.stop();
 }

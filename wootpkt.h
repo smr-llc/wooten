@@ -8,6 +8,7 @@
 typedef struct {
     uint8_t magic;
     uint16_t seq;
+    char connId[6];
 } WootPktHeader;
 
 typedef struct {

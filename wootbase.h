@@ -2,29 +2,31 @@
 
 #include <Bela.h>
 #include <libraries/Gui/Gui.h>
-#include <list>
+#include <map>
+#include <string>
 
-#include "connection.h"
+#include "session.h"
 #include "mixer.h"
+#include "levelmeter.h"
 
 class WootBase {
 public:
-    void setup(BelaContext *context);
+    int setup(BelaContext *context);
     void processFrame(BelaContext *context);
 
     static void auxProcess(void *selfArg);
     static bool guiControlHandler(JSONObject &json, void *selfArg);
 
-
 private:
     LevelMeter m_inputMeters[2];
     void auxProcessImpl();
     bool guiControlHandlerImpl(JSONObject &json);
-    void addConnection(const char* host);
+    void joinSession(std::string sessionId);
+    void leaveSession();
 
     Gui m_gui;
     Mixer m_mixer;
-    std::list<Connection*> m_connections;
+    Session m_session;
 
     unsigned int m_coreBuffer;
     

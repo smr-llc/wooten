@@ -10,16 +10,14 @@
 #include "config.h"
 #include "levelmeter.h"
 #include "mixer.h"
+#include "wootpkt.h"
 
 class WootRx {
 public:
     WootRx();
     ~WootRx();
 
-    int init(in_port_t port);
     void writeReceivedFrame(BelaContext *context, Mixer &mixer);
-
-    static void rxUdp(void*);
 
     LevelMeter * const levelMeter();
 
@@ -29,15 +27,15 @@ public:
     void setRxLevel(float level);
     float rxLevel() const;
 
+    void handleFrame(const WootPkt &pkt);
+
 private:
     LevelMeter m_meter;
     resamp2_crcf m_resampler;
-    int m_sock;
     int m_readPos;
     int m_writePos;
-    struct sockaddr_in m_peerAddr;
-	socklen_t m_peerSockLen;
     float m_buf[RINGBUFF_SAMPLES];
     int m_rxQueueSize;
     float m_rxLevel;
+    uint16_t m_lastSeq;
 };

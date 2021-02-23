@@ -16,9 +16,14 @@ bool setup(BelaContext *context, void *userData)
 		return false;
 	}
 
-	Bela_runAuxiliaryTask(PortBroker::assignPorts, 10);
 
-	base.setup(context);
+	if (base.setup(context) != 0) {
+		printf("FATAL: Failed WootBase setup!\n");
+		fflush(stdout);
+		return false;
+	}
+	
+	Bela_runAuxiliaryTask(PortBroker::assignPorts, 10);
 	Bela_runAuxiliaryTask(WootBase::auxProcess, 20, &base);
 
 	return true;

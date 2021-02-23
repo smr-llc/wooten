@@ -12,43 +12,17 @@
 
 
 WootRx::WootRx() :
-	m_sock(0),
 	m_readPos(0),
 	m_writePos(0),
 	m_rxQueueSize(8),
-	m_rxLevel(0.9)
+	m_rxLevel(0.9),
+	m_lastSeq(0)
 {
 	m_resampler = resamp2_crcf_create(4, 0.0f, 60.0f);
 }
 
 WootRx::~WootRx() {
 	resamp2_crcf_destroy(m_resampler);
-}
-
-int WootRx::init(in_port_t port) {
-	m_peerSockLen = sizeof(m_peerAddr);
-
-	if ((m_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-	{
-		printf("FATAL: Failed to create udp receive socket, got errno %d\n", errno);
-		fflush(stdout);
-		return 1;
-	}
-
-	struct sockaddr_in addr;
-	memset((char *) &addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = port;
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	if( bind(m_sock, (struct sockaddr*)&addr, sizeof(addr) ) == -1)
-	{
-		printf("FATAL: Failed to bind udp receive socket, got errno %d\n", errno);
-		fflush(stdout);
-		return 2;
-	}
-
-	return 0;
 }
 
 LevelMeter * const WootRx::levelMeter() {
@@ -77,66 +51,21 @@ float WootRx::rxLevel() const {
 	return m_rxLevel;
 }
 
-void WootRx::rxUdp(void* rxArg) {
-	WootRx* rx = (WootRx*)rxArg;
-
-	printf("Starting rxUdp...\n");
-	fflush(stdout);
-
-	printf("Payload size: %d\n", sizeof(WootPkt));
-
-    WootPkt pkt;
-	int lastSeq = -1;
-
-	while (!Bela_stopRequested()) {
-
-		while (true) {
-			int nBytes = recvfrom(rx->m_sock,
-									(char*)&pkt,
-									sizeof(WootPkt),
-									MSG_DONTWAIT,
-									(struct sockaddr *) &rx->m_peerAddr,
-									&rx->m_peerSockLen);
-			
-			if (nBytes == 0) {
-				break;
-			}
-			if (nBytes < 0) {
-				if (errno == EAGAIN) {
-					break;
-				}
-				printf("ERROR: Unexpected receive error, got errno %d\n", errno);
-				sleep(3);
-				break;
-			}
-			if (nBytes != sizeof(WootPkt)) {
-				continue;
-			}
-			if (pkt.header.magic != WOOT_PKT_MAGIC) {
-				continue;
-			}
-
-			if (pkt.header.seq > lastSeq + 1) {
-				printf("WARN: Seq skip %d - %d\n", lastSeq, pkt.header.seq);
-			}
-			else if (pkt.header.seq < lastSeq) {
-				printf("WARN: Out of order seq %d - %d\n", lastSeq, pkt.header.seq);
-			}
-			lastSeq = pkt.header.seq;
-
-			for (int i = 0; i < NETBUFF_SAMPLES; i++) {
-				rx->m_buf[rx->m_writePos + i] = ((float)pkt.samples[i]) / 32768.0f;
-			}
-			rx->m_writePos += NETBUFF_SAMPLES;
-			rx->m_writePos %= RINGBUFF_SAMPLES;
-		}
-
-		fflush(stdout);
-		usleep(250);
+void WootRx::handleFrame(const WootPkt &pkt) {
+	uint16_t expected = m_lastSeq + 1;
+	if (pkt.header.seq > expected) {
+		printf("WARN: Seq skip %d - %d\n", m_lastSeq, pkt.header.seq);
 	}
+	else if (pkt.header.seq < m_lastSeq) {
+		printf("WARN: Out of order seq %d - %d\n", m_lastSeq, pkt.header.seq);
+	}
+	m_lastSeq = pkt.header.seq;
 
-	printf("Ending rxUdp\n");
-	fflush(stdout);
+	for (int i = 0; i < NETBUFF_SAMPLES; i++) {
+		m_buf[m_writePos + i] = ((float)pkt.samples[i]) / 32768.0f;
+	}
+	m_writePos += NETBUFF_SAMPLES;
+	m_writePos %= RINGBUFF_SAMPLES;
 }
 
 void WootRx::writeReceivedFrame(BelaContext *context, Mixer &mixer) {

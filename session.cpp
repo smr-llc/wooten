@@ -398,15 +398,10 @@ void Session::rxUdpImpl() {
 			}
 
 			std::string connId(pkt.header.connId, 6);
-            printf("got Pkt from %s\n", connId.c_str());
             {
                 std::lock_guard<std::mutex> guard(m_connMutex);
-                for (auto pair : m_connections) {
-                    printf("conn key %s\n", pair.first.c_str());
-                }
                 auto it = m_connections.find(connId);
                 if (it != m_connections.end()) {
-                    printf("processing Pkt from %s\n", connId.c_str());
                     it->second->handleFrame(pkt);
                 }
             }

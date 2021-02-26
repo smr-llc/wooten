@@ -5,7 +5,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdint.h>
-#include <liquid/liquid.h>
 
 #include "config.h"
 #include "levelmeter.h"
@@ -15,7 +14,6 @@
 class WootRx {
 public:
     WootRx();
-    ~WootRx();
 
     void writeReceivedFrame(BelaContext *context, Mixer &mixer);
 
@@ -31,7 +29,6 @@ public:
 
 private:
     LevelMeter m_meter;
-    resamp2_crcf m_resampler;
     int m_readPos;
     int m_writePos;
     float m_buf[RINGBUFF_SAMPLES];

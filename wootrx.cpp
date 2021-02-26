@@ -18,11 +18,6 @@ WootRx::WootRx() :
 	m_rxLevel(0.9),
 	m_lastSeq(0)
 {
-	m_resampler = resamp2_crcf_create(4, 0.0f, 60.0f);
-}
-
-WootRx::~WootRx() {
-	resamp2_crcf_destroy(m_resampler);
 }
 
 LevelMeter * const WootRx::levelMeter() {
@@ -78,19 +73,10 @@ void WootRx::writeReceivedFrame(BelaContext *context, Mixer &mixer) {
 		m_readPos %= RINGBUFF_SAMPLES;
 	}
 
-	mixer.addLayer(m_rxLevel);
+	mixer.addLayer(m_rxLevel, Mixer::Rate_22050);
 	if (bufSamples >= NETBUFF_SAMPLES) {
-		liquid_float_complex upsampled[2];
-		liquid_float_complex sample;
-		sample.imag = 0.0f;
 		for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
-			sample.real = m_buf[m_readPos + n];
-			// upsample/interpolate from 22.05 back to 44.1
-			resamp2_crcf_interp_execute(m_resampler, sample, upsampled);
-			mixer.writeSample(n * 2, upsampled[0].real);
-			mixer.writeSample(n * 2 + 1, upsampled[1].real);
-			m_meter.feedSample(upsampled[0].real);
-			m_meter.feedSample(upsampled[1].real);
+			mixer.writeSample(n, m_buf[m_readPos + n]);
 		}
 		m_readPos += NETBUFF_SAMPLES;
 		m_readPos %= RINGBUFF_SAMPLES;

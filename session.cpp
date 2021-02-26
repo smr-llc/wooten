@@ -256,6 +256,7 @@ void Session::manageSessionImpl() {
 
     sigset_t sigMask;
     sigemptyset(&sigMask);
+    sigaddset(&sigMask, SIGTERM);
     sigaddset(&sigMask, SIGINT);
     sigaddset(&sigMask, SIGQUIT);
     sigaddset(&sigMask, SIGHUP);
@@ -277,6 +278,10 @@ void Session::manageSessionImpl() {
 
         int pollResult = ppoll(&pSock, 1, &timeOut, &sigMask);
         if (pollResult == -1) {
+            if (errno == EINTR) {
+                std::cerr << "Session manager interrupted by signal, closing...";
+                break;
+            }
             std::cerr << "poll errno " << errno;
             break;
         }
@@ -318,6 +323,7 @@ void Session::manageSessionImpl() {
                         delete c;
                     }
                     else {
+                        std::cout << "Adding connection to " << joinedId << "\n";
                         c->initializeReadBuffer(m_wootBase->gui());
                         {
                             std::lock_guard<std::mutex> guard(m_connMutex);

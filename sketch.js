@@ -72,6 +72,10 @@ function drawConnection(c) {
 	let lvlBuf = Bela.data.buffers[c.readBuf+1];
 	let sendBuf = [c.queueSlider.value(), c.levelSlider.value()];
 
+	if (!name) {
+		return;
+	}
+
 	// draw background panel
     fill(40);
     noStroke();

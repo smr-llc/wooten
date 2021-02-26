@@ -15,6 +15,10 @@ int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
     m_connId = std::string(data.connId, 6);
     struct in_addr host;
 
+    if (memcmp(data.connId, sessionData.connId, 6) == 0) {
+        return -1;
+    }
+
     if (memcmp(&data.publicAddr, &sessionData.publicAddr, sizeof(struct in_addr)) == 0) {
         if (memcmp(&data.privateAddr, &sessionData.privateAddr, sizeof(struct in_addr)) == 0) {
             return -1;
@@ -37,13 +41,7 @@ int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
         return result;
     }
 
-	printf("Initialized transmitter\n");
-    fflush(stdout);
-
-	printf("Initialized receiver\n");
-    fflush(stdout);
-
-	printf("Finished negotiating connection with %s\n", m_host.c_str());
+	printf("Finished setting up peer connection with %s\n", m_host.c_str());
     fflush(stdout);
 
 	Bela_runAuxiliaryTask(WootTx::txUdp, 50, &m_tx);

@@ -58,10 +58,6 @@ void Connection::processFrame(BelaContext *context, Mixer &mixer) {
     m_rx.writeReceivedFrame(context, mixer);
 }
 
-void Connection::initializeReadBuffer(Gui &gui) {
-    m_guiReadBuffer = gui.setBuffer('d', 5);
-}
-
 int Connection::writeToGuiBuffer(Gui &gui, int offset) {
     std::vector<char> nameVec(m_host.begin(), m_host.end()); 
     gui.sendBuffer(offset, nameVec);
@@ -69,8 +65,8 @@ int Connection::writeToGuiBuffer(Gui &gui, int offset) {
     return 2;
 }
 
-void Connection::readFromGuiBuffer(Gui &gui) {
-    DataBuffer& buffer = gui.getDataBuffer(m_guiReadBuffer);
+void Connection::readFromGuiBuffer(Gui &gui, unsigned int bufferId) {
+    DataBuffer& buffer = gui.getDataBuffer(bufferId);
     int* guiData = buffer.getAsInt();
     int rxQSize = guiData[0];
     float rxLevel = ((float)guiData[1]) / 1000.0f;

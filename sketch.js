@@ -57,23 +57,20 @@ function createConnection(x, y, w, h, readBuf, writeBuf) {
 		y: y,
 		w: w,
 		h: h,
-		readBuf: readBuf,
-		writeBuf: writeBuf,
 		levelSlider: rxLevelSlider,
 		queueSlider: rxQueueSlider
 	}
 }
 
-function drawConnection(c) {
+function drawConnection(c, readBuf, writeBuf) {
 	let rowH = 0.25 * c.h;
 	let colW = 0.05 * c.w;
 
-	let name = Bela.data.buffers[c.readBuf];
-	let lvlBuf = Bela.data.buffers[c.readBuf+1];
-	let sendBuf = [c.queueSlider.value(), c.levelSlider.value()];
+	let name = Bela.data.buffers[readBuf];
+	let lvlBuf = Bela.data.buffers[readBuf+1];
 
 	if (!name) {
-		return;
+		return -1;
 	}
 
 	// draw background panel
@@ -91,7 +88,8 @@ function drawConnection(c) {
 	text(name.join("") + " Level:", c.x, c.y+rowH, colW*3.5, rowH);
 	text("Speed <-> Quality", c.x, c.y+rowH*2, colW*3.5, rowH);
 
-	Bela.data.sendBuffer(c.writeBuf, 'int', sendBuf);
+	let sendBuf = [c.queueSlider.value(), c.levelSlider.value()];
+	Bela.data.sendBuffer(writeBuf, 'int', sendBuf);
 
 	return 2; // number of read buffers read
 }
@@ -115,10 +113,14 @@ function draw() {
 	textAlign(RIGHT);
 	text("Send Level:", 0, rowH*1, colW*3.5, rowH);
 
-	let activeSession = Bela.data.buffers[3];
-	let sessionName = Bela.data.buffers[4];
+	buf[0] = monitorSelfToggle.checked() ? 1 : 0;
+	buf[1] = monitorSelfSlider.value();
+    Bela.data.sendBuffer(0, 'int', buf);
 
+
+	let activeSession = Bela.data.buffers[3];
 	if (activeSession == 1) {
+		let sessionName = Bela.data.buffers[4];
 		sessionInput.attribute('disabled', 'true');
 		sessionInput.value(sessionName.join(""));
 		joinSessionBtn.attribute('disabled', 'true');
@@ -133,32 +135,32 @@ function draw() {
 	}
 
 	let rxCount = Bela.data.buffers[9];
+	if (rxCount === undefined) {
+		rxCount = 0;
+	}
+	while (connections.length > rxCount) {
+		let c = connections.pop();
+		c.levelSlider.remove();
+		c.queueSlider.remove();
+	}
 	if (rxCount > 0) {
 		let readBufOffset = 10;
 		let writeBufOffset = 1;
 		let rowOffset = rowH*9;
 		for (let i = 0; i < rxCount; i++) {
 			if ((i + 1) > connections.length) {
-				connections.push(createConnection(0, rowOffset, colW*20, rowH*4, readBufOffset, writeBufOffset));
+				connections.push(createConnection(0, rowOffset, colW*20, rowH*4));
 			}
-			let read = drawConnection(connections[i]);
-			
+			let result = drawConnection(connections[i], readBufOffset, writeBufOffset);
+			if (result < 1) {
+				continue;
+			}
 			rowOffset += rowH * 4.5;
-			readBufOffset += read;
+			readBufOffset += result;
 			writeBufOffset += 1;
 		}
 	}
 
-	// text("Receive Level:", colW, rowH*4, colW*4, rowH);
-	// textAlign(CENTER);
-	// text("Latency <-> Quality", colW, rowH*7, colW*18, rowH);
-
-	// fill(50, 200, 50);
-
-	//buf[0] = qualitySlider.value();
-	buf[0] = monitorSelfToggle.checked() ? 1 : 0;
-	buf[1] = monitorSelfSlider.value();
-    Bela.data.sendBuffer(0, 'int', buf);
 }
 
 function formatDOMElements() {

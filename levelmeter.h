@@ -4,7 +4,7 @@
 
 #include "config.h"
 
-#define LEVEL_BUFF_SIZE 30
+#define LEVEL_BUFF_SIZE 40
 
 class LevelMeter {
 

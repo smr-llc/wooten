@@ -22,9 +22,6 @@ bool setup(BelaContext *context, void *userData)
 		fflush(stdout);
 		return false;
 	}
-	
-	Bela_runAuxiliaryTask(PortBroker::assignPorts, 10);
-	Bela_runAuxiliaryTask(WootBase::auxProcess, 20, &base);
 
 	return true;
 }

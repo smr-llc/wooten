@@ -10,6 +10,8 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <list>
+#include <memory>
 
 class WootBase;
 
@@ -34,7 +36,8 @@ private:
     void rxUdpImpl();
 
     std::mutex m_connMutex;
-    std::map<std::string, Connection*> m_connections;
+    std::list<std::unique_ptr<Connection>> m_connections;
+    std::vector<unsigned int> m_guiBuffIds;
 
     std::string m_sessId;
     int m_rxSock;

@@ -76,9 +76,17 @@ void WootRx::writeReceivedFrame(BelaContext *context, Mixer &mixer) {
 	mixer.addLayer(m_rxLevel, Mixer::Rate_22050);
 	if (bufSamples >= NETBUFF_SAMPLES) {
 		for(unsigned int n = 0; n < NETBUFF_SAMPLES; n++) {
-			mixer.writeSample(n, m_buf[m_readPos + n]);
+			float sample = m_buf[m_readPos + n];
+			mixer.writeSample(n, sample);
+			m_meter.feedSample(sample);
+			m_meter.feedSample(sample);
 		}
 		m_readPos += NETBUFF_SAMPLES;
 		m_readPos %= RINGBUFF_SAMPLES;
+	}
+	else {
+		for(unsigned int n = 0; n < BLOCK_SIZE; n++) {
+			m_meter.feedSample(0.0);
+		}
 	}
 }

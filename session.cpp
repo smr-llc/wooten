@@ -69,8 +69,8 @@ void Session::stop() {
 
 void Session::processFrame(BelaContext *context, Mixer &mixer) {
     std::lock_guard<std::mutex> guard(m_connMutex);
-	for (auto &pair : m_connections) {
-		pair.second->processFrame(context, mixer);
+	for (auto &c : m_connections) {
+		c->processFrame(context, mixer);
 	}
 }
 
@@ -78,10 +78,10 @@ void Session::writeToGuiBuffer() {
     std::lock_guard<std::mutex> guard(m_connMutex);
     m_wootBase->gui().sendBuffer(9, m_connections.size());
     int connectionBufferOffset = 10;
-    for (auto &pair : m_connections) {
-        int increment = pair.second->writeToGuiBuffer(m_wootBase->gui(), connectionBufferOffset);
-        pair.second->readFromGuiBuffer(m_wootBase->gui());
-        connectionBufferOffset += increment;
+    int readBuffOffset = 0;
+    for (auto &c : m_connections) {
+        connectionBufferOffset += c->writeToGuiBuffer(m_wootBase->gui(), connectionBufferOffset);
+        c->readFromGuiBuffer(m_wootBase->gui(), m_guiBuffIds.at(readBuffOffset++));
     }
 }
 
@@ -100,9 +100,6 @@ void Session::manageSession(void* session) {
     s->manageSessionImpl();
     {
         std::lock_guard<std::mutex> guard(s->m_connMutex);
-        for (auto &pair : s->m_connections) {
-            delete pair.second;
-        }
         s->m_connections.clear();
     }
     s->m_managerActive = false;
@@ -310,12 +307,15 @@ void Session::manageSessionImpl() {
             if (pkt.type == PTYPE_JOINED) {
                 memcpy(&joined, pkt.data, sizeof(JoinedData));
                 std::string joinedId(joined.connId, 6);
-                std::map<std::string,Connection*>::iterator it;
-                bool makeNew = false;
+                bool makeNew = true;
                 {
                     std::lock_guard<std::mutex> guard(m_connMutex);
-                    it = m_connections.find(joinedId);
-                    makeNew = (it == m_connections.end());
+                    for (auto &c : m_connections) {
+                        if (c->connId() == joinedId) {
+                            makeNew = false;
+                            break;
+                        }
+                    }
                 }
                 if (makeNew) {
                     Connection *c = new Connection();
@@ -324,30 +324,27 @@ void Session::manageSessionImpl() {
                     }
                     else {
                         std::cout << "Adding connection to " << joinedId << "\n";
-                        c->initializeReadBuffer(m_wootBase->gui());
                         {
                             std::lock_guard<std::mutex> guard(m_connMutex);
-                            m_connections[joinedId] = c;
+                            m_connections.push_back(std::unique_ptr<Connection>(c));
+                            while (m_connections.size() > m_guiBuffIds.size()) {
+                                m_guiBuffIds.push_back(m_wootBase->gui().setBuffer('d', 5));
+                            }
                         }
                     }
                 }
             }
             else if (pkt.type == PTYPE_LEFT) {
-                Connection *toDelete = nullptr;
                 {
                     std::lock_guard<std::mutex> guard(m_connMutex);
                     memcpy(&joined, pkt.data, sizeof(JoinedData));
                     std::string leftId(joined.connId, 6);
-                    auto it = m_connections.find(leftId);
-                    if (it != m_connections.end()) {
-                        {
+                    for (auto it = m_connections.begin(); it != m_connections.end(); ++it) {
+                        if ((*it)->connId() == leftId) {
                             m_connections.erase(it);
+                            break;
                         }
-                        toDelete = it->second;
                     }
-                }
-                if (toDelete) {
-                    delete toDelete;
                 }
             }
         }
@@ -406,9 +403,11 @@ void Session::rxUdpImpl() {
 			std::string connId(pkt.header.connId, 6);
             {
                 std::lock_guard<std::mutex> guard(m_connMutex);
-                auto it = m_connections.find(connId);
-                if (it != m_connections.end()) {
-                    it->second->handleFrame(pkt);
+                for (auto &c : m_connections) {
+                    if (c->connId() == connId) {
+                        c->handleFrame(pkt);
+                        break;
+                    }
                 }
             }
 		}

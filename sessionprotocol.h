@@ -33,13 +33,18 @@ typedef struct {
 } ConnPkt;
 
 typedef struct {
-    in_port_t port;
+    in_port_t privatePort;
     struct in_addr privateAddr;
 } JoinData;
 
 typedef struct {
-    in_port_t port;
+    in_port_t privatePort;
     struct in_addr privateAddr;
+    in_port_t publicPort;
     struct in_addr publicAddr;
     char connId[6];
 } JoinedData;
+
+typedef struct {
+    in_port_t serverPort;
+} NatHolepunchData;

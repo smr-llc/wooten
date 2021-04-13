@@ -14,6 +14,7 @@ Connection::~Connection() {
 int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
     m_connId = std::string(data.connId, 6);
     struct in_addr host;
+    in_port_t port;
 
     if (memcmp(data.connId, sessionData.connId, 6) == 0) {
         return -1;
@@ -24,18 +25,20 @@ int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
             return -1;
         }
         memcpy(&host, &data.privateAddr, sizeof(struct in_addr));
+        port = data.privatePort;
     }
     else {
         memcpy(&host, &data.publicAddr, sizeof(struct in_addr));
+        port = data.publicPort;
     }
-    uint16_t portNum = ntohs(data.port);
+    uint16_t portNum = ntohs(port);
     m_host = inet_ntoa(host);
 
 	printf("Attempting to create new peer connection with %s on port %d...\n", m_host.c_str(), portNum);
     fflush(stdout);
 
     std::string sessionConnId = std::string(sessionData.connId, 6);
-    int result = m_tx.init(host, data.port, sessionConnId);
+    int result = m_tx.init(host, port, sessionConnId);
     if (result != 0) {
 		printf("ERROR: Failed to initialize connection tx component\n");
         return result;

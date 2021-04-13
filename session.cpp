@@ -33,13 +33,20 @@ int Session::setup(WootBase *wootBase) {
 		return -1;
 	}
 
-	struct sockaddr_in addr;
-	memset((char *) &addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(42000);
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	memset((char *) &m_udpAddr, 0, sizeof(m_udpAddr));
+	m_udpAddr.sin_family = AF_INET;
+	m_udpAddr.sin_port = htons(43000);
+	m_udpAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-	if( bind(m_rxSock, (struct sockaddr*)&addr, sizeof(addr) ) == -1)
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 500000;
+    if (setsockopt(m_rxSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        std::cerr << "FATAL: Failed to set timeout for UDP receive socket for NAT mapping\n";
+        return -1;
+    }
+
+	if( bind(m_rxSock, (struct sockaddr*)&m_udpAddr, sizeof(m_udpAddr) ) == -1)
 	{
 		printf("FATAL: Failed to bind udp receive socket, got errno %d\n", errno);
 		fflush(stdout);
@@ -58,6 +65,17 @@ void Session::start(std::string sessId) {
     }
     m_sessId = sessId;
     m_terminate = false;
+
+    if (sessId.size() == 0) {
+        sessId = createSession();
+        if (sessId.size() == 0) {
+            return;
+        }
+    }
+
+    if (joinSession(sessId) != 0) {
+        return;
+    }
 
 	Bela_scheduleAuxiliaryTask(m_manageSessionTask);
 	Bela_scheduleAuxiliaryTask(m_rxUdpTask);
@@ -137,119 +155,167 @@ int getLocalIp(std::string interface, struct in_addr &addr) {
     return 0;
 }
 
-void Session::manageSessionImpl() {
+std::string Session::createSession() {
+    int sock = serverConnect();
+    if (sock == -1) {
+        return "";
+    }
+
+    std::cout << "Creating session...\n";
+    ConnPkt sendPkt;
+    sendPkt.magic = SESSION_PKT_MAGIC;
+    sendPkt.type = PTYPE_CREATE;
+    if (send(sock, (char*)&sendPkt, sizeof(ConnPkt), 0) == -1) {
+        std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
+        close(sock);
+        return "";
+    }
+
+    ConnPkt pkt;
+    ssize_t nBytes = read(sock, &pkt, sizeof(ConnPkt));
+    if (nBytes != sizeof(ConnPkt) || pkt.magic != SESSION_PKT_MAGIC || pkt.type != PTYPE_CREATED) {
+        std::cerr << "FATAL: bad response " << pkt.type << ", " << nBytes << "\n";
+        close(sock);
+        return "";
+    }
+
+    close(sock);
+    return std::string(pkt.sid, 4);
+}
+
+int Session::joinSession(std::string sessId) {
+
     struct in_addr localIp;
     if (getLocalIp("eth0", localIp) != 0) {
         memset(&localIp, 0, sizeof(struct in_addr));
     }
     std::cout << "Local network IP: " << inet_ntoa(localIp) << "\n";
 
-    struct sockaddr_in peerAddr;
-	socklen_t peerAddrLen = sizeof(peerAddr);
+    int sock = serverConnect();
+    if (sock == -1) {
+        return -1;
+    }
 
+    std::cout << "Joining Session: " << sessId << "\n";
+    ConnPkt sendPkt;
+    sendPkt.magic = SESSION_PKT_MAGIC;
+    sendPkt.type = PTYPE_JOIN;
+    JoinData data;
+    data.privatePort = htons(43000);
+    data.privateAddr = localIp;
+    memcpy(sendPkt.sid, sessId.c_str(), 4);
+    memcpy(sendPkt.data, &data, sizeof(JoinData));
+    if (send(sock, (char*)&sendPkt, sizeof(ConnPkt), 0) == -1) {
+        std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
+		close(sock);
+        return -1;
+    }
+
+    ConnPkt pkt;
+    ssize_t nBytes = read(sock, &pkt, sizeof(ConnPkt));
+    if (nBytes != sizeof(ConnPkt) || pkt.magic != SESSION_PKT_MAGIC) {
+        std::cerr << "FATAL: bad response " << nBytes << "\n";
+		close(sock);
+        return -1;
+    }
+    if (pkt.type != PTYPE_JOINED) {
+        std::cerr << "FATAL: bad response, type " << pkt.type << "\n";
+		close(sock);
+        return -1;
+    }
+    std::cout << "Got joined response\n";
+
+    m_sessId = sessId;
+
+    memcpy(&m_myJoinedData, pkt.data, sizeof(JoinedData));
+
+    std::cout << "Port: " << ntohs(m_myJoinedData.privatePort) << "\n";
+    std::cout << "Private IP: " << inet_ntoa(m_myJoinedData.privateAddr) << "\n";
+    std::cout << "Public Port: " << ntohs(m_myJoinedData.publicPort) << "\n";
+    std::cout << "Public IP: " << inet_ntoa(m_myJoinedData.publicAddr) << "\n";
+
+    return 0;
+}
+
+int Session::serverConnect() {
     struct addrinfo *addrInfo;
     int result = getaddrinfo("wooten.smr.llc", NULL, NULL, &addrInfo);
     if (result != 0) {
 		printf("ERROR: Failed to resolve hostname into address, error: %d\n", result);
 		fflush(stdout);
-		this->stop();
-        return;
+		return -1;
     }
-    memcpy(&peerAddr, addrInfo->ai_addr, addrInfo->ai_addrlen);
-	peerAddr.sin_port = htons(28314);
+	struct sockaddr_in serverAddr;
+    memcpy(&serverAddr, addrInfo->ai_addr, addrInfo->ai_addrlen);
+	serverAddr.sin_port = htons(28314);
     freeaddrinfo(addrInfo);
 
-	int sock;
-    int nBytes;
-    ConnPkt pkt;
-    ConnPkt sendPkt;
-    
-    if (m_sessId.size() == 0) {
-        sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
-            std::cerr << "FATAL: failed to create TCP socket! errno: " << errno << "\n";
-            this->stop();
-            return;
-        }
-
-
-        if (connect(sock, (struct sockaddr*)&peerAddr, peerAddrLen) != 0) {
-            std::cerr << "FATAL: failed to connect TCP socket! errno: " << errno << "\n";
-            this->stop();
-            return;
-        }
-
-        std::cout << "Creating session...\n";
-        sendPkt.magic = SESSION_PKT_MAGIC;
-        sendPkt.type = PTYPE_CREATE;
-        if (send(sock, (char*)&sendPkt, sizeof(ConnPkt), 0) == -1) {
-            std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
-            close(sock);
-            this->stop();
-            return;
-        }
-
-        nBytes = read(sock, &pkt, sizeof(ConnPkt));
-        if (nBytes != sizeof(ConnPkt) || pkt.magic != SESSION_PKT_MAGIC || pkt.type != PTYPE_CREATED) {
-            std::cerr << "FATAL: bad response " << pkt.type << ", " << nBytes << "\n";
-            close(sock);
-            this->stop();
-            return;
-        }
-        close(sock);
-        m_sessId = std::string(pkt.sid, 4);
-    }
-    
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         std::cerr << "FATAL: failed to create TCP socket! errno: " << errno << "\n";
-        this->stop();
-        return;
+        return -1;
     }
-    if (connect(sock, (struct sockaddr*)&peerAddr, peerAddrLen) != 0) {
+
+    if (connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) != 0) {
         std::cerr << "FATAL: failed to connect TCP socket! errno: " << errno << "\n";
-		close(sock);
-        this->stop();
-        return;
-	}
+        return -1;
+    }
 
-    std::cout << "Joining Session: " << m_sessId << "\n";
+    ConnPkt recvPkt;
+	struct sockaddr_in peerAddr;
+    socklen_t peerAddrLen = sizeof(struct sockaddr_in);
+    ConnPkt sendPkt;
     sendPkt.magic = SESSION_PKT_MAGIC;
-    sendPkt.type = PTYPE_JOIN;
-    JoinData data;
-    data.port = htons(42000);
-    data.privateAddr = localIp;
-    memcpy(sendPkt.sid, m_sessId.c_str(), 4);
-    memcpy(sendPkt.data, &data, sizeof(JoinData));
-    if (send(sock, (char*)&sendPkt, sizeof(ConnPkt), 0) == -1) {
-        std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
-		close(sock);
-        this->stop();
-        return;
+    sendPkt.version = CONN_PKT_VERSION;
+    sendPkt.type = PTYPE_HOLEPUNCH;
+    int tries = 0;
+    while (true) {
+        tries++;
+        if (tries > 5) {
+            break;
+        }
+        ssize_t nBytes = sendto(m_rxSock,
+            (char*)&sendPkt,
+            sizeof(ConnPkt),
+            0,
+            (struct sockaddr *) &serverAddr,
+            sizeof(serverAddr));
+        if (nBytes < 0) {
+            std::cerr << "Failed to send NAT holepunch, got errno " << errno << "\n";
+            break;
+        }
+
+        nBytes = recvfrom(m_rxSock, &recvPkt, sizeof(ConnPkt), 0, (struct sockaddr *) &peerAddr, &peerAddrLen);
+        
+        if (nBytes < 0) {
+            if (errno == EAGAIN) {
+                continue;
+            }
+            std::cerr << "ERROR: Failed to read server UDP message, got errno " << errno << "\n";
+            break;
+        }
+
+        if (nBytes != sizeof(ConnPkt)) {
+            std::cerr << "WARN: Invalid server UDP message size " << nBytes << "\n";
+            continue;
+        }
+
+        if (peerAddr.sin_addr.s_addr != serverAddr.sin_addr.s_addr) {
+            std::cerr << "WARN: Server UDP message from unexpected IP " << inet_ntoa(peerAddr.sin_addr) << " (waiting for " << inet_ntoa(serverAddr.sin_addr) << ")\n";
+            continue;
+        }
+
+        m_sessSock = sock;
+        return sock;
     }
 
-    nBytes = read(sock, &pkt, sizeof(ConnPkt));
-    if (nBytes != sizeof(ConnPkt) || pkt.magic != SESSION_PKT_MAGIC) {
-        std::cerr << "FATAL: bad response " << nBytes << "\n";
-		close(sock);
-        this->stop();
-        return;
-    }
-    if (pkt.type != PTYPE_JOINED) {
-        std::cerr << "FATAL: bad response, type " << pkt.type << "\n";
-		close(sock);
-        this->stop();
-        return;
-    }
-    std::cout << "Got joined response\n";
+    close(sock);
+    return -1;
+}
 
-    JoinedData joined;
-    memcpy(&joined, pkt.data, sizeof(JoinedData));
-    memcpy(&m_myJoinedData, pkt.data, sizeof(JoinedData));
-
-    std::cout << "Port: " << ntohs(joined.port) << "\n";
-    std::cout << "Private IP: " << inet_ntoa(joined.privateAddr) << "\n";
-    std::cout << "Public IP: " << inet_ntoa(joined.publicAddr) << "\n";
+void Session::manageSessionImpl() {
+    int nBytes;
+    ConnPkt pkt;
 
     sigset_t sigMask;
     sigemptyset(&sigMask);
@@ -265,12 +331,15 @@ void Session::manageSessionImpl() {
     memcpy(heartbeat.sid, m_sessId.c_str(), 4);
     memcpy(heartbeat.connId, pkt.connId, 6);
 
+
+    JoinedData joined;
+
     struct timespec timeOut;
 	timeOut.tv_sec = 9;
 	timeOut.tv_nsec = 0;
     while (!Bela_stopRequested() && !m_terminate) {
         struct pollfd pSock;
-        pSock.fd = sock;
+        pSock.fd = m_sessSock;
         pSock.events = POLLIN;
 
         int pollResult = ppoll(&pSock, 1, &timeOut, &sigMask);
@@ -297,7 +366,7 @@ void Session::manageSessionImpl() {
         }
         
         if (pollResult > 0) {
-            nBytes = read(sock, &pkt, sizeof(ConnPkt));
+            nBytes = read(m_sessSock, &pkt, sizeof(ConnPkt));
             if (nBytes != sizeof(ConnPkt) || pkt.magic != SESSION_PKT_MAGIC) {
                 std::cerr << "FATAL: bad response " << nBytes << "\n";
                 break;
@@ -350,7 +419,7 @@ void Session::manageSessionImpl() {
         }
         else {
             std::cout << "Sending heartbeat...\n";
-            if (send(sock, (char*)&heartbeat, sizeof(ConnPkt), 0) == -1) {
+            if (send(m_sessSock, (char*)&heartbeat, sizeof(ConnPkt), 0) == -1) {
                 std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
                 break;
             }
@@ -358,7 +427,7 @@ void Session::manageSessionImpl() {
     }
 
 
-    close(sock);
+    close(m_sessSock);
 }
 
 void Session::rxUdpImpl() {
@@ -392,6 +461,10 @@ void Session::rxUdpImpl() {
 				break;
 			}
 			if (nBytes != sizeof(WootPkt)) {
+                if (nBytes == sizeof(ConnPkt)) {
+                    // maybe track that this is a holepunch packet?
+                    continue;
+                }
 				printf("Bad size %d\n", nBytes);
 				continue;
 			}

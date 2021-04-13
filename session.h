@@ -32,6 +32,9 @@ public:
     static void manageSession(void*);
     static void rxUdp(void*);
 private:
+    std::string createSession();
+    int joinSession(std::string sessId);
+    int serverConnect();
     void manageSessionImpl();
     void rxUdpImpl();
 
@@ -41,6 +44,8 @@ private:
 
     std::string m_sessId;
     int m_rxSock;
+    int m_sessSock;
+    struct sockaddr_in m_udpAddr;
     std::atomic<bool> m_udpActive;
     std::atomic<bool> m_managerActive;
     std::atomic<bool> m_terminate;

@@ -13,7 +13,7 @@ public:
     Connection();
     ~Connection();
 
-    int connect(const JoinedData &data, const JoinedData &sessionData);
+    int connect(const JoinedData &data, const JoinedData &sessionData, int udpSock);
     void handleFrame(const WootPkt &pkt);
     void processFrame(BelaContext *context, Mixer &mixer);
 

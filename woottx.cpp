@@ -19,31 +19,8 @@ WootTx::WootTx() :
 {
 }
 
-int WootTx::init(struct in_addr addr, in_port_t port, std::string connId) {
-	if ( (m_sock = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP)) == -1)
-	{
-		printf("Failed to create outgoing udp socket!\n");
-		fflush(stdout);
-		return 1;	
-	}
-
-	int enableReuse = 1;
-	if (setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, &enableReuse, sizeof(int)) < 0) {
-        std::cerr << "FATAL: Failed to set port re-use on UDP receive socket! errno: " << errno << "\n";
-        return -1;
-	}
-
-    struct sockaddr_in txAddr;
-	memset((char *) &txAddr, 0, sizeof(txAddr));
-	txAddr.sin_family = AF_INET;
-	txAddr.sin_port = htons(APP_PORT_NUMBER);
-	txAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	if( bind(m_sock, (struct sockaddr*)&txAddr, sizeof(txAddr) ) == -1)
-	{
-		printf("FATAL: Failed to bind udp tx socket, got errno %d\n", errno);
-		fflush(stdout);
-		return 1;
-	}
+int WootTx::init(struct in_addr addr, in_port_t port, std::string connId, int udpSock) {
+	m_sock = udpSock;
 
 	m_peerAddrLen = sizeof(m_peerAddr);
 	memset((char *) &m_peerAddr, 0, m_peerAddrLen);
@@ -104,7 +81,7 @@ void WootTx::txUdp(void* txArg) {
 			sendto(tx->m_sock,
 					(char*)&pkt,
 					sizeof(WootPkt),
-					0,
+					MSG_DONTWAIT,
 					(struct sockaddr *) &tx->m_peerAddr,
 					tx->m_peerAddrLen);
 		}

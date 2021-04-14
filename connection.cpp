@@ -11,7 +11,7 @@ Connection::~Connection() {
     m_tx.stop();
 }
 
-int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
+int Connection::connect(const JoinedData &data, const JoinedData &sessionData, int udpSock) {
     m_connId = std::string(data.connId, 6);
     struct in_addr host;
     in_port_t port;
@@ -38,7 +38,7 @@ int Connection::connect(const JoinedData &data, const JoinedData &sessionData) {
     fflush(stdout);
 
     std::string sessionConnId = std::string(sessionData.connId, 6);
-    int result = m_tx.init(host, port, sessionConnId);
+    int result = m_tx.init(host, port, sessionConnId, udpSock);
     if (result != 0) {
 		printf("ERROR: Failed to initialize connection tx component\n");
         return result;

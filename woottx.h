@@ -11,7 +11,7 @@ class WootTx {
 public:
     WootTx();
 
-    int init(struct in_addr addr, in_port_t port, std::string connId);
+    int init(struct in_addr addr, in_port_t port, std::string connId, int udpSock);
     void sendFrame(BelaContext *context);
 
     static void txUdp(void*);

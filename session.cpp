@@ -398,7 +398,7 @@ void Session::manageSessionImpl() {
                 }
                 if (makeNew) {
                     Connection *c = new Connection();
-                    if (c->connect(joined, m_myJoinedData) != 0) {
+                    if (c->connect(joined, m_myJoinedData, m_rxSock) != 0) {
                         delete c;
                     }
                     else {

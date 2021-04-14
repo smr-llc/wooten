@@ -5,6 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
+#include <iostream>
 
 #include "config.h"
 #include "woottx.h"
@@ -24,6 +25,24 @@ int WootTx::init(struct in_addr addr, in_port_t port, std::string connId) {
 		printf("Failed to create outgoing udp socket!\n");
 		fflush(stdout);
 		return 1;	
+	}
+
+	int enableReuse = 1;
+	if (setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, &enableReuse, sizeof(int)) < 0) {
+        std::cerr << "FATAL: Failed to set port re-use on UDP receive socket! errno: " << errno << "\n";
+        return -1;
+	}
+
+    struct sockaddr_in txAddr;
+	memset((char *) &txAddr, 0, sizeof(txAddr));
+	txAddr.sin_family = AF_INET;
+	txAddr.sin_port = htons(APP_PORT_NUMBER);
+	txAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if( bind(m_sock, (struct sockaddr*)&txAddr, sizeof(txAddr) ) == -1)
+	{
+		printf("FATAL: Failed to bind udp tx socket, got errno %d\n", errno);
+		fflush(stdout);
+		return 1;
 	}
 
 	m_peerAddrLen = sizeof(m_peerAddr);

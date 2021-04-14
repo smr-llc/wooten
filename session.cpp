@@ -35,7 +35,7 @@ int Session::setup(WootBase *wootBase) {
 
 	memset((char *) &m_udpAddr, 0, sizeof(m_udpAddr));
 	m_udpAddr.sin_family = AF_INET;
-	m_udpAddr.sin_port = htons(43000);
+	m_udpAddr.sin_port = htons(APP_PORT_NUMBER);
 	m_udpAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     struct timeval tv;
@@ -45,6 +45,12 @@ int Session::setup(WootBase *wootBase) {
         std::cerr << "FATAL: Failed to set timeout for UDP receive socket for NAT mapping\n";
         return -1;
     }
+
+    int enableReuse = 1;
+	if (setsockopt(m_rxSock, SOL_SOCKET, SO_REUSEADDR, &enableReuse, sizeof(int)) < 0) {
+        std::cerr << "FATAL: Failed to set port re-use on UDP receive socket! errno: " << errno << "\n";
+        return -1;
+	}
 
 	if( bind(m_rxSock, (struct sockaddr*)&m_udpAddr, sizeof(m_udpAddr) ) == -1)
 	{
@@ -201,7 +207,7 @@ int Session::joinSession(std::string sessId) {
     sendPkt.magic = SESSION_PKT_MAGIC;
     sendPkt.type = PTYPE_JOIN;
     JoinData data;
-    data.privatePort = htons(43000);
+    data.privatePort = htons(APP_PORT_NUMBER);
     data.privateAddr = localIp;
     memcpy(sendPkt.sid, sessId.c_str(), 4);
     memcpy(sendPkt.data, &data, sizeof(JoinData));
@@ -269,9 +275,11 @@ int Session::serverConnect() {
     sendPkt.version = CONN_PKT_VERSION;
     sendPkt.type = PTYPE_HOLEPUNCH;
     int tries = 0;
+    int allTries = 0;
     while (true) {
         tries++;
-        if (tries > 5) {
+        allTries++;
+        if (tries > 5 || allTries > 500) {
             break;
         }
         ssize_t nBytes = sendto(m_rxSock,
@@ -297,11 +305,13 @@ int Session::serverConnect() {
 
         if (nBytes != sizeof(ConnPkt)) {
             std::cerr << "WARN: Invalid server UDP message size " << nBytes << "\n";
+            tries--;
             continue;
         }
 
         if (peerAddr.sin_addr.s_addr != serverAddr.sin_addr.s_addr) {
             std::cerr << "WARN: Server UDP message from unexpected IP " << inet_ntoa(peerAddr.sin_addr) << " (waiting for " << inet_ntoa(serverAddr.sin_addr) << ")\n";
+            tries--;
             continue;
         }
 
@@ -463,6 +473,7 @@ void Session::rxUdpImpl() {
 			if (nBytes != sizeof(WootPkt)) {
                 if (nBytes == sizeof(ConnPkt)) {
                     // maybe track that this is a holepunch packet?
+                    printf("Got holepunch\n");
                     continue;
                 }
 				printf("Bad size %d\n", nBytes);

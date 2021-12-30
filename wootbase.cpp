@@ -39,7 +39,7 @@ void WootBase::processFrame(BelaContext *context) {
     }
 
 	// Write summed audio to DAC
-	m_mixer.flushToDac(context);
+	m_mixer.flushToDac(context, &m_recorder);
 
 
     // Perform GUI buffer updates
@@ -128,6 +128,14 @@ bool WootBase::guiControlHandlerImpl(JSONObject &json) {
 		leaveSession();
 		return true;
 	}
+	else if (event == "start-recording") {
+		setRecording(true);
+		return true;
+	}
+	else if (event == "stop-recording") {
+		setRecording(false);
+		return true;
+	}
 
 	return false;
 }
@@ -138,4 +146,13 @@ void WootBase::joinSession(std::string sessionId) {
 
 void WootBase::leaveSession() {
 	m_session.stop();
+}
+
+void WootBase::setRecording(bool record) {
+	if (record && !m_recorder.isRecording()) {
+		m_recorder.startRecording();
+	}
+	else if (!record && m_recorder.isRecording()) {
+		m_recorder.stopRecording();
+	}
 }

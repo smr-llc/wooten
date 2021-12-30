@@ -25,10 +25,12 @@ private:
     bool guiControlHandlerImpl(JSONObject &json);
     void joinSession(std::string sessionId);
     void leaveSession();
+    void setRecording(bool record);
 
     Gui m_gui;
     Mixer m_mixer;
     Session m_session;
+    Recorder m_recorder;
 
     unsigned int m_coreBuffer;
     

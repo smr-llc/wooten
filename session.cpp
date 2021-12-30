@@ -8,13 +8,17 @@
 #include <chrono>
 #include <string.h>
 #include <net/if.h>
+#include <netinet/tcp.h>
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <poll.h>
 #include <signal.h>
 #include <iostream>
+#include <fcntl.h>
 
 #include "wootbase.h"
+
+#define SERVER_ADDRESS "wooten.smr.llc"
 
 Session::Session() :
     m_udpActive(false),
@@ -245,9 +249,9 @@ int Session::joinSession(std::string sessId) {
 
 int Session::serverConnect() {
     struct addrinfo *addrInfo;
-    int result = getaddrinfo("wooten.smr.llc", NULL, NULL, &addrInfo);
+    int result = getaddrinfo(SERVER_ADDRESS, NULL, NULL, &addrInfo);
     if (result != 0) {
-		printf("ERROR: Failed to resolve hostname into address, error: %d\n", result);
+		printf("ERROR: Failed to resolve hostname %s into IP address, error: %d\n", SERVER_ADDRESS, result);
 		fflush(stdout);
 		return -1;
     }
@@ -261,11 +265,34 @@ int Session::serverConnect() {
         std::cerr << "FATAL: failed to create TCP socket! errno: " << errno << "\n";
         return -1;
     }
+    fcntl(sock, F_SETFL, O_NONBLOCK);
 
-    if (connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) != 0) {
-        std::cerr << "FATAL: failed to connect TCP socket! errno: " << errno << "\n";
+    connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    FD_SET(sock, &fdset);
+    struct timeval tv;
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+
+    if (select(sock + 1, NULL, &fdset, NULL, &tv) != 1)
+    {
+        std::cerr << "FATAL: failed initiate connection to wooten server at " << SERVER_ADDRESS << "! errno: " << errno << "\n";
         return -1;
     }
+
+    int so_error;
+    socklen_t len = sizeof(so_error);
+    getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
+    if (so_error != 0) {
+        std::cerr << "FATAL: failed to connect to wooten server at " << SERVER_ADDRESS << "! errno: " << errno << "\n";
+        return -1;
+    }
+
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags ^ SOCK_NONBLOCK);
 
     ConnPkt recvPkt;
 	struct sockaddr_in peerAddr;
@@ -333,6 +360,7 @@ void Session::manageSessionImpl() {
     sigaddset(&sigMask, SIGINT);
     sigaddset(&sigMask, SIGQUIT);
     sigaddset(&sigMask, SIGHUP);
+    sigaddset(&sigMask, SIGUSR1);
 
     ConnPkt heartbeat;
     heartbeat.magic = SESSION_PKT_MAGIC;
@@ -340,7 +368,6 @@ void Session::manageSessionImpl() {
     heartbeat.type = PTYPE_HEARTBEAT;
     memcpy(heartbeat.sid, m_sessId.c_str(), 4);
     memcpy(heartbeat.connId, pkt.connId, 6);
-
 
     JoinedData joined;
 

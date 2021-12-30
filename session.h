@@ -25,6 +25,7 @@ public:
     void stop();
     void processFrame(BelaContext *context, Mixer &mixer);
     void writeToGuiBuffer();
+    void closeSession();
 
     bool isActive() const;
     std::string sessionId() const;

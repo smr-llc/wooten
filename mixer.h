@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include <liquid/liquid.h>
+#include "recorder.h"
 
 class Mixer {
 public:
@@ -18,7 +19,7 @@ public:
     void addLayer(float gainFactor = 1.0, int rate = Rate_44100);
     void writeSample(int offset, float sample);
 
-    void flushToDac(BelaContext *context);
+    void flushToDac(BelaContext *context, Recorder *recorder);
 
 private:
     void sum();

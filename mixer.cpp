@@ -32,7 +32,7 @@ void Mixer::writeSample(int offset, float sample) {
     m_buf[offset] = sample * m_layerGainFactor;
 }
 
-void Mixer::flushToDac(BelaContext *context) {
+void Mixer::flushToDac(BelaContext *context, Recorder *recorder) {
     float factor = 1.0f;
 
     if (m_layers > 0 ) {
@@ -58,6 +58,10 @@ void Mixer::flushToDac(BelaContext *context) {
     for (int i = 0; i < BLOCK_SIZE; i++) {
         audioWrite(context, i, 0, m_mixed[i] * factor);
         audioWrite(context, i, 1, m_mixed[i] * factor);
+    }
+
+    if (recorder && recorder->isRecording()) {
+        recorder->writeSamples(m_mixed, BLOCK_SIZE);
     }
     reset();
 }

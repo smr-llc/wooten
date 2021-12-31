@@ -54,10 +54,35 @@ void Mixer::flushToDac(BelaContext *context, Recorder *recorder) {
         m_mixed[i*2 + 1] += upsampled[1].real;
     }
 
+    // compress and limit channels for reasonable default mixes
+    if (m_layers > 0) {
+        float compRange = 0.1 * min(m_layers, 6);
+        float compThresh = 1.0 - compRange;
+        float compRatio = 1.0 / ((float) m_layers + 1);
+
+        float limitRange = 0.03;
+        float limitThresh = 1.0 - limitRange;
+        float limitSpace = ((float) m_layers) - limitThresh + 0.01;
+        float limitRatio = limitRange / limitSpace;
+
+        for (int i = 0; i < BLOCK_SIZE; i++) {
+            float sample = m_mixed[i];
+            if (sample > compThresh) {
+                float over = sample - compThresh;
+                sample = compThresh + (compRatio * over);
+            }
+            if (sample > limitThresh) {
+                float over = sample - limitThresh;
+                sample = limitThresh + (limitRatio * over);
+            }
+            m_mixed[i] = sample;
+        }
+    }
+
     // write mix to DAC
     for (int i = 0; i < BLOCK_SIZE; i++) {
-        audioWrite(context, i, 0, m_mixed[i] * factor);
-        audioWrite(context, i, 1, m_mixed[i] * factor);
+        audioWrite(context, i, 0, m_mixed[i]);
+        audioWrite(context, i, 1, m_mixed[i]);
     }
 
     if (recorder && recorder->isRecording()) {

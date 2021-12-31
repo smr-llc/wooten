@@ -45,9 +45,9 @@ void Mixer::flushToDac(BelaContext *context, Recorder *recorder) {
     // upsample and integrate 22.05kHz mix
     liquid_float_complex upsampled[2];
     liquid_float_complex sample;
-    sample.imag = 0.0f;
     for (int i = 0; i < BLOCK_SIZE/2; i++) {
         sample.real = m_mixed22050[i];
+        sample.imag = 0.0f;
         // upsample/interpolate from 22.05 back to 44.1
         resamp2_crcf_interp_execute(m_resampler, sample, upsampled);
         m_mixed[i*2] += upsampled[0].real;
@@ -58,10 +58,12 @@ void Mixer::flushToDac(BelaContext *context, Recorder *recorder) {
     if (m_layers > 0) {
         float compRange = 0.1 * min(m_layers, 6);
         float compThresh = 1.0 - compRange;
+        float compThreshLow = -1.0 * compThresh;
         float compRatio = 1.0 / ((float) m_layers + 1);
 
         float limitRange = 0.03;
         float limitThresh = 1.0 - limitRange;
+        float limitThreshLow = -1.0 * limitThresh;
         float limitSpace = ((float) m_layers) - limitThresh + 0.01;
         float limitRatio = limitRange / limitSpace;
 
@@ -71,9 +73,17 @@ void Mixer::flushToDac(BelaContext *context, Recorder *recorder) {
                 float over = sample - compThresh;
                 sample = compThresh + (compRatio * over);
             }
+            else if (sample < compThreshLow) {
+                float over = sample - compThreshLow;
+                sample = compThreshLow + (compRatio * over);
+            }
             if (sample > limitThresh) {
                 float over = sample - limitThresh;
                 sample = limitThresh + (limitRatio * over);
+            }
+            else if (sample < limitThreshLow) {
+                float over = sample - limitThreshLow;
+                sample = limitThreshLow + (limitRatio * over);
             }
             m_mixed[i] = sample;
         }

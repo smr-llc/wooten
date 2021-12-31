@@ -31,28 +31,6 @@ function setup() {
 	checkEnabled();
 }
 
-function drawRecordButton() {
-
-	let rowH = 0.025 * windowHeight;
-	let colW = 0.05 * windowWidth
-
-	var txt
-	if(isRecording){
-		fill("red");
-		txt = "Recording..."
-	}
-	else{
-		fill("grey");
-		txt = "Record"
-	}
-	noStroke();
-	radius = Math.min(rowH*.75, colW)
-	ellipse(colW*15, rowH*5.5, radius*2, radius*2);
-
-	fill(50);
-	text(txt, 10, 10, 70, 80);
-}
-
 function drawLevelBar(x, y, maxW, maxH, avg, peak, heldPeak) {
 	noStroke();
 	fill(20);

@@ -63,6 +63,8 @@ int Session::setup(WootBase *wootBase) {
 		return -1;
 	}
 
+
+
     m_manageSessionTask = Bela_createAuxiliaryTask(Session::manageSession, 50, "Manage Session", this);
     m_rxUdpTask = Bela_createAuxiliaryTask(Session::rxUdp, 50, "Receive UDP", this);
 
@@ -168,6 +170,7 @@ int getLocalIp(std::string interface, struct in_addr &addr) {
 std::string Session::createSession() {
     int sock = serverConnect();
     if (sock == -1) {
+        std::cerr << "Failed to connect to server to create a session\n";
         return "";
     }
 
@@ -193,16 +196,19 @@ std::string Session::createSession() {
     return std::string(pkt.sid, 4);
 }
 
+
 int Session::joinSession(std::string sessId) {
 
     struct in_addr localIp;
     if (getLocalIp("eth0", localIp) != 0) {
         memset(&localIp, 0, sizeof(struct in_addr));
     }
+    std::cout << "Preparing to join Session " << sessId << "...\n";
     std::cout << "Local network IP: " << inet_ntoa(localIp) << "\n";
 
     int sock = serverConnect();
     if (sock == -1) {
+        std::cerr << "Failed to connect to session " << sessId << " - server connection failed\n";
         return -1;
     }
 
@@ -247,6 +253,9 @@ int Session::joinSession(std::string sessId) {
     return 0;
 }
 
+#define TCP_SYN_RETRIES 3
+#define UDP_RESPONSE_RETRIES 10
+
 int Session::serverConnect() {
     struct addrinfo *addrInfo;
     int result = getaddrinfo(SERVER_ADDRESS, NULL, NULL, &addrInfo);
@@ -265,34 +274,18 @@ int Session::serverConnect() {
         std::cerr << "FATAL: failed to create TCP socket! errno: " << errno << "\n";
         return -1;
     }
-    fcntl(sock, F_SETFL, O_NONBLOCK);
 
-    connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
-
-    fd_set fdset;
-    FD_ZERO(&fdset);
-    FD_SET(sock, &fdset);
-    struct timeval tv;
-    tv.tv_sec = 3;
-    tv.tv_usec = 0;
-
-    if (select(sock + 1, NULL, &fdset, NULL, &tv) != 1)
-    {
-        std::cerr << "FATAL: failed initiate connection to wooten server at " << SERVER_ADDRESS << "! errno: " << errno << "\n";
+    int tcp_syn_retries = TCP_SYN_RETRIES;
+    socklen_t len = sizeof(tcp_syn_retries);
+    if (setsockopt(sock, IPPROTO_TCP, TCP_SYNCNT, &tcp_syn_retries, len) == -1) {
+        std::cerr << "FATAL: failed to configure TCP socket retry limit! errno: " << errno << "\n";
         return -1;
     }
 
-    int so_error;
-    socklen_t len = sizeof(so_error);
-    getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
-
-    if (so_error != 0) {
-        std::cerr << "FATAL: failed to connect to wooten server at " << SERVER_ADDRESS << "! errno: " << errno << "\n";
+    if (connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) != 0) {
+        std::cerr << "FATAL: failed to connect TCP socket! errno: " << errno << "\n";
         return -1;
     }
-
-    int flags = fcntl(sock, F_GETFL, 0);
-    fcntl(sock, F_SETFL, flags ^ SOCK_NONBLOCK);
 
     ConnPkt recvPkt;
 	struct sockaddr_in peerAddr;
@@ -306,7 +299,7 @@ int Session::serverConnect() {
     while (true) {
         tries++;
         allTries++;
-        if (tries > 5 || allTries > 500) {
+        if (tries > UDP_RESPONSE_RETRIES || allTries > UDP_RESPONSE_RETRIES * 20) {
             break;
         }
         ssize_t nBytes = sendto(m_rxSock,
@@ -346,21 +339,19 @@ int Session::serverConnect() {
         return sock;
     }
 
+    std::cerr << "ERROR: Never received holepunch response from server\n";
     close(sock);
     return -1;
 }
 
+#define SESSION_HEARTBEAT_INTERVAL 9
+#define INITIAL_HEARTBEAT_DELAY 1
+#define POLL_INTERVAL_MS 500
+#define POLL_COUNT_FACTOR (1000 / POLL_INTERVAL_MS)
+
 void Session::manageSessionImpl() {
     int nBytes;
     ConnPkt pkt;
-
-    sigset_t sigMask;
-    sigemptyset(&sigMask);
-    sigaddset(&sigMask, SIGTERM);
-    sigaddset(&sigMask, SIGINT);
-    sigaddset(&sigMask, SIGQUIT);
-    sigaddset(&sigMask, SIGHUP);
-    sigaddset(&sigMask, SIGUSR1);
 
     ConnPkt heartbeat;
     heartbeat.magic = SESSION_PKT_MAGIC;
@@ -371,15 +362,13 @@ void Session::manageSessionImpl() {
 
     JoinedData joined;
 
-    struct timespec timeOut;
-	timeOut.tv_sec = 9;
-	timeOut.tv_nsec = 0;
+    int timeoutCount = (SESSION_HEARTBEAT_INTERVAL - INITIAL_HEARTBEAT_DELAY) * POLL_COUNT_FACTOR;
     while (!Bela_stopRequested() && !m_terminate) {
         struct pollfd pSock;
         pSock.fd = m_sessSock;
         pSock.events = POLLIN;
 
-        int pollResult = ppoll(&pSock, 1, &timeOut, &sigMask);
+        int pollResult = poll(&pSock, 1, 500);
         if (pollResult == -1) {
             if (errno == EINTR) {
                 std::cerr << "Session manager interrupted by signal, closing...";
@@ -455,15 +444,20 @@ void Session::manageSessionImpl() {
             }
         }
         else {
-            std::cout << "Sending heartbeat...\n";
-            if (send(m_sessSock, (char*)&heartbeat, sizeof(ConnPkt), 0) == -1) {
-                std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
-                break;
+            timeoutCount++;
+            if (timeoutCount >= SESSION_HEARTBEAT_INTERVAL * POLL_COUNT_FACTOR) {
+                timeoutCount = 0;
+                std::cout << "Sending heartbeat...\n";
+                if (send(m_sessSock, (char*)&heartbeat, sizeof(ConnPkt), 0) == -1) {
+                    std::cerr << "FATAL: failed to send on TCP socket! errno: " << errno << "\n";
+                    break;
+                }
             }
         }
     }
 
 
+    std::cout << "Ending server session\n";
     close(m_sessSock);
 }
 

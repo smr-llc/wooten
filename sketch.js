@@ -31,7 +31,23 @@ function setup() {
 	checkEnabled();
 }
 
+function toDbScale(val) {
+	let db = Math.log10(val) * 20
+	if (db < -40) {
+		return 0.05 - (0.05 * (Math.max(db + 40, -30) / -30))
+	}
+	else if (db < -25) {
+		return 0.05 + 0.20 - (0.20 * (Math.max(db + 25, -15) / -15))
+	}
+	else {
+		return 0.25 + 0.80 * (1 - (db / -25))
+	}
+}
+
 function drawLevelBar(x, y, maxW, maxH, avg, peak, heldPeak) {
+	avg = toDbScale(avg)
+	peak = toDbScale(peak)
+	heldPeak = toDbScale(heldPeak)
 	noStroke();
 	fill(20);
 	rect(x, y, maxW, maxH);

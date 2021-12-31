@@ -6,12 +6,19 @@ int WootBase::setup(BelaContext *context) {
 	m_gui.setup(context->projectName);
 	m_gui.setControlDataCallback(WootBase::guiControlHandler, this);
 
+	Bela_muteSpeakers(1);
+
 	m_coreBuffer = m_gui.setBuffer('d', 10);
 	printf("Core Buffer ID: %d\n", m_coreBuffer);
 
 	if (m_session.setup(this) != 0) {
 		return -1;
 	}
+
+
+	// Setup Aux task for non-real-time calls
+	m_lastOutputGainLevel = 0;
+	Bela_runAuxiliaryTask(WootBase::auxProcess, 30, this);
 
 	return 0;
 }
@@ -66,6 +73,8 @@ void WootBase::processFrame(BelaContext *context) {
 		int* guiData = buffer.getAsInt();
 		m_monitorSelf = (guiData[0] == 1) ? true : false;
 		m_monitorSelfLevel = ((float)guiData[1]) / 1000.0f;
+		m_outputGainLevel = guiData[2];
+		m_inputGainLevel = guiData[3];
 	}
 }
 
@@ -87,7 +96,18 @@ void WootBase::auxProcess(void *selfArg) {
 
 void WootBase::auxProcessImpl() {
     while (!Bela_stopRequested()) {
-        sleep(1);
+        usleep(100000);
+		if (m_lastOutputGainLevel != m_outputGainLevel) {
+			m_lastOutputGainLevel = m_outputGainLevel;
+			float dbGain = ((float)m_lastOutputGainLevel) / 2.0f;
+			Bela_setHeadphoneLevel(dbGain);
+		}
+		if (m_lastInputGainLevel != m_inputGainLevel) {
+			m_lastInputGainLevel = m_inputGainLevel;
+			float dbGain = ((float)m_lastInputGainLevel) / 2.0f;
+			Bela_setPgaGain(dbGain, 0);
+			Bela_setPgaGain(dbGain, 1);
+		}
     }
 }
 

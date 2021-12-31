@@ -12,9 +12,12 @@ function setup() {
 	//text font
 	textFont('Courier New');
 
-	monitorSelfToggle = createCheckbox("Monitor", false);
+	monitorSelfToggle = createCheckbox("Monitor", true);
 	monitorSelfSlider = createSlider(1, 1000, 900);
   	monitorSelfToggle.changed(checkEnabled);
+
+	outputSlider = createSlider(-127, 0, -12);
+	inputSlider = createSlider(0, 127, 32);
 
 	sessionInput = createInput('');
 	joinSessionBtn = createButton('Join Session');
@@ -40,7 +43,7 @@ function toDbScale(val) {
 		return 0.05 + 0.20 - (0.20 * (Math.max(db + 25, -15) / -15))
 	}
 	else {
-		return 0.25 + 0.80 * (1 - (db / -25))
+		return 0.25 + 0.75 * (1 - (db / -25))
 	}
 }
 
@@ -84,7 +87,7 @@ function adjustConnections() {
 	for(let i = 0; i < connections.length; i++) {
 		conn = connections[i]
 		conn.x = 0
-		conn.y = rowH*9 + (i * rowH * 4.5)
+		conn.y = rowH*8.5 + (i * rowH * 4.5)
 		conn.w = colW*20
 		conn.h = rowH*4
 
@@ -117,9 +120,9 @@ function drawConnection(c, readBuf, writeBuf) {
 	}
 	fill(200);
 	textSize(fontSize(colW, rowH));
-	textAlign(RIGHT);
+	textAlign(RIGHT, CENTER);
 	text(name.join("") + " Level:", c.x, c.y+rowH, colW*3.5, rowH);
-	text("Speed <-> Quality", c.x, c.y+rowH*2, colW*3.5, rowH);
+	text("Fast <--> Good", c.x, c.y+rowH*2, colW*3.5, rowH);
 
 	let sendBuf = [c.queueSlider.value(), c.levelSlider.value()];
 	Bela.data.sendBuffer(writeBuf, 'int', sendBuf);
@@ -144,11 +147,16 @@ function draw() {
 
 	fill(200);
 	textSize(fontSize(colW, rowH));
-	textAlign(RIGHT);
-	text("Send Level:", 0, rowH*1, colW*4, rowH);
+	textAlign(RIGHT, CENTER);
+	text("In/Send:", 0, rowH*1, colW*4, rowH);
+
+	text("Out Gain:", 0, rowH*4.5, colW*4, rowH);
+	text("In Gain:", colW*10, rowH*4.5, colW*4, rowH);
 
 	buf[0] = monitorSelfToggle.checked() ? 1 : 0;
 	buf[1] = monitorSelfSlider.value();
+	buf[2] = outputSlider.value();
+	buf[3] = inputSlider.value();
     Bela.data.sendBuffer(0, 'int', buf);
 
 
@@ -216,14 +224,21 @@ function formatDOMElements() {
 	monitorSelfToggle.style('color', color(200));
 	monitorSelfToggle.style('text-align', 'right');
 
-	elRect(monitorSelfToggle, colW*0.5, rowH*3, colW*3.5, rowH);
+	elRect(monitorSelfToggle, 0, rowH*3, colW*4, rowH);
 	elRect(monitorSelfSlider, colW*4.5, rowH*3, colW*15, rowH);
 
-	elRect(sessionInput, colW, rowH*5.5, colW*3, rowH*2);
-	elRect(joinSessionBtn, colW*4.5, rowH*5.5, colW*3, rowH*2);
-	elRect(createSessionBtn, colW*8, rowH*5.5, colW*3, rowH*2);
-	elRect(leaveSessionBtn, colW*11.5, rowH*5.5, colW*3, rowH*2);
-	elRect(recordBtn, colW*15, rowH*5.5, colW*3, rowH*2);
+	gainRow = rowH*4.5
+
+	elRect(outputSlider, colW*4.5, gainRow, colW*5, rowH);
+	elRect(inputSlider, colW*14, gainRow, colW*5, rowH);
+
+	sessRow = 6*rowH
+
+	elRect(sessionInput, colW, sessRow, colW*3, rowH*2);
+	elRect(joinSessionBtn, colW*4.5, sessRow, colW*3, rowH*2);
+	elRect(createSessionBtn, colW*8, sessRow, colW*3, rowH*2);
+	elRect(leaveSessionBtn, colW*11.5, sessRow, colW*3, rowH*2);
+	elRect(recordBtn, colW*15, sessRow, colW*3, rowH*2);
 
 	sessionInput.style('font',  pxFont(colW, rowH*1.5) + ' "Courier New"');
 	joinSessionBtn.style('font',  pxFont(colW, rowH) + ' "Courier New"');

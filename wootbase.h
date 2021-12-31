@@ -36,4 +36,8 @@ private:
     
     bool m_monitorSelf;
     float m_monitorSelfLevel;
+    int m_outputGainLevel;
+    int m_lastOutputGainLevel;
+    int m_inputGainLevel;
+    int m_lastInputGainLevel;
 };

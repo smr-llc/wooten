@@ -6,6 +6,32 @@ A low-latency remote musical collaboration software project. Meant to run on a
 Peer-to-peer session management is handled by the
 [wooten server](https://github.com/smr-llc/wooten-server).
 
+
+## Install via provided image
+
+The simplest way to set up wooten is with one of the
+[release images](https://github.com/smr-llc/wooten/releases).
+
+You can install it onto your Bela-equipped BeagleBone Black revC in the same way
+that you would install one of the Bela release images. Instructions are here:
+https://learn.bela.io/using-bela/bela-techniques/managing-your-sd-card/
+
+Example steps:
+
+- flash the provided image onto a micro SD card using balena etcher
+- insert the micro SD card into the BeagleBone Black
+- plug the BeagleBone Black into a computer via USB
+- ssh in and flash the eMMC:
+```
+ssh root@192.168.7.2
+/opt/Bela/bela_flash_emmc.sh
+```
+- now you can remove the SD card and reset the BeagleBone
+- you should be able to access the wooten GUI at http://192.168.7.2/gui/
+
+
+## Build it yourself
+
 ### Prerequisite: liquid-dsp
 
 Build and install
@@ -36,7 +62,7 @@ cd wooten
 Then navigate to the GUI in a web browser at `http://192.168.7.2/gui`
 
 
-### Notes
+## Notes
 
 Tested with Bela image 0.3.8b and 0.3.8e
 

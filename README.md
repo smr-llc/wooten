@@ -6,6 +6,7 @@ A low-latency remote musical collaboration software project. Meant to run on a
 Peer-to-peer session management is handled by the
 [wooten server](https://github.com/smr-llc/wooten-server).
 
+[![MAGFest Presentation](https://img.youtube.com/vi/eLhypHRxMv4/default.jpg)](https://youtu.be/eLhypHRxMv4)
 
 ## Install via provided image
 
